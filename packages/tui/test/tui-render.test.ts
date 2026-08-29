@@ -13,7 +13,7 @@ import {
 	setCapabilities,
 	setCellDimensions,
 } from "../src/terminal-image.ts";
-import type { Component, TUI } from "../src/tui.ts";
+import { type Component, CURSOR_MARKER, type TUI } from "../src/tui.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
@@ -179,7 +179,7 @@ describe("TUI bounded render output", () => {
 		);
 		assert.strictEqual(
 			terminal.writes.join(""),
-			`\x1b[?2026h${kittyLine}\r\n${kittyLine}\x1b[?2026l`,
+			`\x1b[?2026h${kittyLine}\r\n${kittyLine}\x1b[?25l\x1b[?2026l`,
 			"chunking must preserve the synchronized render output",
 		);
 	});
@@ -203,6 +203,39 @@ describe("TUI bounded render output", () => {
 		assert.ok(output.startsWith("\x1b[?2026h"));
 		assert.ok(output.endsWith("\x1b[?2026l"));
 		assert.ok(!output.includes("\x1b[2J"), "the update should stay on the differential render path");
+	});
+
+	it("positions the hardware cursor before ending synchronized output", async () => {
+		const terminal = new LoggingVirtualTerminal(40, 10);
+		const tui = new TuiMainScreen(terminal, true);
+		const component = new TestComponent();
+		tui.addChild(component);
+
+		component.lines = [`prompt${CURSOR_MARKER}`];
+		tui.start();
+		await terminal.waitForRender();
+		const assertCursorPositioning = (output: string, expectedColumn: number): void => {
+			const cursorPosition = output.lastIndexOf(`\x1b[${expectedColumn}G`);
+			const endSynchronizedOutput = output.lastIndexOf("\x1b[?2026l");
+			assert.ok(cursorPosition >= 0, "render should position the hardware cursor");
+			assert.ok(endSynchronizedOutput > cursorPosition, "cursor positioning must precede synchronized output end");
+			assert.strictEqual(
+				output.slice(endSynchronizedOutput + "\x1b[?2026l".length),
+				"",
+				"synchronized output must not be followed by a separate cursor positioning write",
+			);
+		};
+		assertCursorPositioning(terminal.getWrites(), 7);
+		terminal.clearWrites();
+
+		component.lines = [`updated${CURSOR_MARKER}`];
+		tui.requestRender();
+		await terminal.waitForRender();
+
+		const output = terminal.getWrites();
+		assertCursorPositioning(output, 8);
+
+		tui.stop();
 	});
 });
 

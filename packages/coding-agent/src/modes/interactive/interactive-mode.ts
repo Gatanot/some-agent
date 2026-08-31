@@ -956,16 +956,18 @@ export class InteractiveMode {
 
 		// Add header with keybindings from config (unless silenced)
 		if (this.options.verbose || !this.settingsManager.getQuietStartup()) {
-			// Figlet "slant" ASCII-art wordmark; falls back to a text logo on narrow terminals
+			// ANSI-shadow block wordmark (figlet ansi_shadow, glyphs padded to 9-col slots);
+			// falls back to a text logo on narrow terminals
 			const ORRERY_LOGO = [
-				"   ____  ____  ____  ____________  __",
-				"  / __ \\/ __ \\/ __ \\/ ____/ __ \\ \\/ /",
-				" / / / / /_/ / /_/ / __/ / /_/ /\\  /",
-				"/ /_/ / _, _/ _, _/ /___/ _, _/ / /",
-				"\\____/_/ |_/_/ |_/_____/_/ |_| /_/",
+				" ██████╗  ██████╗   ██████╗   ███████╗  ██████╗   ██╗   ██╗",
+				"██╔═══██╗ ██╔══██╗  ██╔══██╗  ██╔════╝  ██╔══██╗  ╚██╗ ██╔╝",
+				"██║   ██║ ██████╔╝  ██████╔╝  █████╗    ██████╔╝   ╚████╔╝ ",
+				"██║   ██║ ██╔══██╗  ██╔══██╗  ██╔══╝    ██╔══██╗    ╚██╔╝  ",
+				"╚██████╔╝ ██║  ██║  ██║  ██║  ███████╗  ██║  ██║     ██║   ",
+				" ╚═════╝  ╚═╝  ╚═╝  ╚═╝  ╚═╝  ╚══════╝  ╚═╝  ╚═╝     ╚═╝   ",
 			];
 			const logo =
-				(this.ui.terminal.columns >= 42
+				(this.ui.terminal.columns >= 64
 					? ORRERY_LOGO.map((line) => theme.bold(theme.fg("accent", line))).join("\n")
 					: theme.bold(theme.fg("accent", APP_TITLE))) +
 				"\n" +

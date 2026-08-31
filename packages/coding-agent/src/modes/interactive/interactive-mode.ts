@@ -956,15 +956,15 @@ export class InteractiveMode {
 
 		// Add header with keybindings from config (unless silenced)
 		if (this.options.verbose || !this.settingsManager.getQuietStartup()) {
-			// ANSI-shadow block wordmark (figlet ansi_shadow, glyphs padded to 9-col slots);
+			// ANSI-shadow block wordmark (figlet ansi_shadow, natural glyph widths, single-space gaps);
 			// falls back to a text logo on narrow terminals
 			const ORRERY_LOGO = [
-				" ██████╗  ██████╗   ██████╗   ███████╗  ██████╗   ██╗   ██╗",
-				"██╔═══██╗ ██╔══██╗  ██╔══██╗  ██╔════╝  ██╔══██╗  ╚██╗ ██╔╝",
-				"██║   ██║ ██████╔╝  ██████╔╝  █████╗    ██████╔╝   ╚████╔╝ ",
-				"██║   ██║ ██╔══██╗  ██╔══██╗  ██╔══╝    ██╔══██╗    ╚██╔╝  ",
-				"╚██████╔╝ ██║  ██║  ██║  ██║  ███████╗  ██║  ██║     ██║   ",
-				" ╚═════╝  ╚═╝  ╚═╝  ╚═╝  ╚═╝  ╚══════╝  ╚═╝  ╚═╝     ╚═╝   ",
+				" ██████╗  ██████╗  ██████╗  ███████╗ ██████╗  ██╗   ██╗",
+				"██╔═══██╗ ██╔══██╗ ██╔══██╗ ██╔════╝ ██╔══██╗ ╚██╗ ██╔╝",
+				"██║   ██║ ██████╔╝ ██████╔╝ █████╗   ██████╔╝  ╚████╔╝ ",
+				"██║   ██║ ██╔══██╗ ██╔══██╗ ██╔══╝   ██╔══██╗   ╚██╔╝  ",
+				"╚██████╔╝ ██║  ██║ ██║  ██║ ███████╗ ██║  ██║    ██║   ",
+				" ╚═════╝  ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚══════╝ ╚═╝  ╚═╝    ╚═╝   ",
 			];
 			const logo =
 				(this.ui.terminal.columns >= 64

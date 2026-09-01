@@ -207,6 +207,24 @@ export function isImageLine(line: string): boolean {
 }
 
 /**
+ * Zero-width APC marker prefixing rows that carry text placed to the right of
+ * an inline image inside its reserved row block. Renderers skip the erase-line
+ * they normally emit before a row so the image cells stay intact, and strip the
+ * marker before writing the row.
+ */
+export const IMAGE_COMPANION_MARKER = "\x1b_pi:ic\x07";
+
+/** Check whether a line is a companion row of an inline image block. */
+export function hasImageCompanionMarker(line: string): boolean {
+	return line.includes(IMAGE_COMPANION_MARKER);
+}
+
+/** Strip the companion-row marker from a line for terminal output. */
+export function stripImageCompanionMarker(line: string): string {
+	return line.replaceAll(IMAGE_COMPANION_MARKER, "");
+}
+
+/**
  * Generate a random image ID for Kitty graphics protocol.
  * Uses random IDs to avoid collisions between different module instances
  * (e.g., main app vs extensions).

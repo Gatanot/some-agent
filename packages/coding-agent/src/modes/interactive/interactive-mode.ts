@@ -29,6 +29,9 @@ import {
 	type Component,
 	Container,
 	fuzzyFilter,
+	getCapabilities,
+	IMAGE_COMPANION_MARKER,
+	Image,
 	Markdown,
 	matchesKey,
 	ProcessTerminal,
@@ -50,6 +53,7 @@ import {
 	CONFIG_DIR_NAME,
 	getAgentDir,
 	getAuthPath,
+	getBundledInteractiveAssetPath,
 	getDebugLogPath,
 	getDocsPath,
 	VERSION,
@@ -195,6 +199,96 @@ class ExpandableText extends Text implements Expandable {
 
 	setExpanded(expanded: boolean): void {
 		this.setText(expanded ? this.getExpandedText() : this.getCollapsedText());
+	}
+}
+
+/** Startup icon width in terminal cells (kept small so the splash stays compact). */
+const STARTUP_ICON_WIDTH_CELLS = 10;
+const STARTUP_ICON_FILENAME = "icon.png";
+
+let cachedStartupIconBase64: string | undefined;
+let startupIconLoadAttempted = false;
+
+function loadStartupIconBase64(): string | undefined {
+	if (startupIconLoadAttempted) {
+		return cachedStartupIconBase64;
+	}
+	startupIconLoadAttempted = true;
+	try {
+		cachedStartupIconBase64 = fs
+			.readFileSync(getBundledInteractiveAssetPath(STARTUP_ICON_FILENAME))
+			.toString("base64");
+	} catch {
+		cachedStartupIconBase64 = undefined;
+	}
+	return cachedStartupIconBase64;
+}
+
+/**
+ * Startup header: the bundled icon on the left with the wordmark and keybinding
+ * hints to its right (only on terminals with Kitty image support), falling back
+ * to the ASCII-art wordmark otherwise.
+ */
+class StartupHeader implements Component, Expandable {
+	private readonly icon: Image | undefined;
+	private readonly text: ExpandableText;
+
+	constructor(
+		iconBase64: string | undefined,
+		getCollapsedText: () => string,
+		getExpandedText: () => string,
+		expanded: boolean,
+	) {
+		this.icon =
+			iconBase64 === undefined
+				? undefined
+				: new Image(
+						iconBase64,
+						"image/png",
+						{ fallbackColor: (text) => theme.fg("muted", text) },
+						{ maxWidthCells: STARTUP_ICON_WIDTH_CELLS, filename: STARTUP_ICON_FILENAME },
+					);
+		this.text = new ExpandableText(getCollapsedText, getExpandedText, expanded, 1, 0);
+	}
+
+	setExpanded(expanded: boolean): void {
+		this.text.setExpanded(expanded);
+	}
+
+	invalidate(): void {
+		this.text.invalidate();
+		this.icon?.invalidate();
+	}
+
+	render(width: number): string[] {
+		if (!this.icon) {
+			return this.text.render(width);
+		}
+
+		const imageLines = this.icon.render(width);
+		const imageRows = imageLines.length;
+		// Text starts one cell past the icon; the icon may render narrower than
+		// its max width on very narrow terminals, which only shifts the gap.
+		const textColumn = STARTUP_ICON_WIDTH_CELLS + 1;
+		const textWidth = Math.max(1, width - textColumn);
+		const textLines = this.text.render(textWidth);
+		const rows = Math.max(imageRows, textLines.length);
+		const result: string[] = [];
+		for (let row = 0; row < rows; row++) {
+			const text = textLines[row] ?? "";
+			if (row === 0) {
+				// The image placement anchors the block at this row; the erase after
+				// the column offset clears stale text without touching image cells.
+				result.push(`${imageLines[0] ?? ""}\x1b[${textColumn}G\x1b[K${text}`);
+			} else if (row < imageRows) {
+				// Companion rows share the image's reserved block: renderers must not
+				// erase them after the image is placed, hence the marker.
+				result.push(`${IMAGE_COMPANION_MARKER}\x1b[${textColumn}G\x1b[K${text}`);
+			} else {
+				result.push(text);
+			}
+		}
+		return result;
 	}
 }
 
@@ -957,7 +1051,7 @@ export class InteractiveMode {
 		// Add header with keybindings from config (unless silenced)
 		if (this.options.verbose || !this.settingsManager.getQuietStartup()) {
 			// ANSI-shadow block wordmark (figlet ansi_shadow, natural glyph widths, single-space gaps);
-			// falls back to a text logo on narrow terminals
+			// used as the fallback when the terminal cannot render the bundled icon inline
 			const ORRERY_LOGO = [
 				" ██████╗  ██████╗  ██████╗  ███████╗ ██████╗  ██╗   ██╗",
 				"██╔═══██╗ ██╔══██╗ ██╔══██╗ ██╔════╝ ██╔══██╗ ╚██╗ ██╔╝",
@@ -966,12 +1060,17 @@ export class InteractiveMode {
 				"╚██████╔╝ ██║  ██║ ██║  ██║ ███████╗ ██║  ██║    ██║   ",
 				" ╚═════╝  ╚═╝  ╚═╝ ╚═╝  ╚═╝ ╚══════╝ ╚═╝  ╚═╝    ╚═╝   ",
 			];
-			const logo =
-				(this.ui.terminal.columns >= 64
+			const wideEnough = this.ui.terminal.columns >= 64;
+			const asciiLogo =
+				(wideEnough
 					? ORRERY_LOGO.map((line) => theme.bold(theme.fg("accent", line))).join("\n")
 					: theme.bold(theme.fg("accent", APP_TITLE))) +
 				"\n" +
 				theme.fg("dim", `v${this.version}`);
+			const titleLine = `${theme.bold(theme.fg("accent", APP_TITLE))} ${theme.fg("dim", `v${this.version}`)}`;
+			// The icon layout needs Kitty image support; anything else keeps the ASCII wordmark.
+			const iconBase64 = wideEnough && getCapabilities().images === "kitty" ? loadStartupIconBase64() : undefined;
+			const wordmark = iconBase64 === undefined ? asciiLogo : titleLine;
 
 			// Build startup instructions using keybinding hint helpers
 			const hint = (keybinding: AppKeybinding, description: string) => keyHint(keybinding, description);
@@ -1012,12 +1111,11 @@ export class InteractiveMode {
 				"dim",
 				`${APP_TITLE} can explain its own features and look up its docs. Ask it how to use or extend ${APP_TITLE}.`,
 			);
-			this.builtInHeader = new ExpandableText(
-				() => `${logo}\n${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
-				() => `${logo}\n${expandedInstructions}\n\n${onboarding}`,
+			this.builtInHeader = new StartupHeader(
+				iconBase64,
+				() => `${wordmark}\n${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
+				() => `${wordmark}\n${expandedInstructions}\n\n${onboarding}`,
 				this.getStartupExpansionState(),
-				1,
-				0,
 			);
 
 			// Setup UI layout

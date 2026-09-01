@@ -9,6 +9,7 @@ import type { Terminal } from "../src/terminal.ts";
 import {
 	deleteKittyImage,
 	encodeKitty,
+	IMAGE_COMPANION_MARKER,
 	resetCapabilitiesCache,
 	setCapabilities,
 	setCellDimensions,
@@ -486,6 +487,103 @@ describe("TUI Kitty image cleanup", () => {
 		assert.ok(deleteIndex < clearIndex, "old image should be deleted before the screen is cleared");
 
 		tui.stop();
+	});
+});
+
+describe("TUI Kitty image companion rows", () => {
+	it("writes companion rows without erasing the placed image", async () => {
+		setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+		setCellDimensions({ widthPx: 10, heightPx: 10 });
+		try {
+			const terminal = new LoggingVirtualTerminal(40, 10);
+			const tui: TUI = new TuiMainScreen(terminal);
+			const component = new TestComponent();
+			tui.addChild(component);
+
+			component.lines = ["before"];
+			tui.start();
+			await terminal.waitForRender();
+			terminal.clearWrites();
+
+			const image = new Image(
+				"AAAA",
+				"image/png",
+				{ fallbackColor: (value) => value },
+				{ maxWidthCells: 2 },
+				{ widthPx: 20, heightPx: 20 },
+			);
+			const imageSequence = image.render(40)[0]!;
+			component.lines = [
+				"before",
+				`${imageSequence}\x1b[3G\x1b[Ktitle`,
+				`${IMAGE_COMPANION_MARKER}\x1b[3G\x1b[Kline1`,
+				"after",
+			];
+			tui.requestRender();
+			await terminal.waitForRender();
+
+			const writes = terminal.getWrites();
+			assert.ok(
+				writes.includes(`\x1b[2K\r\n\x1b[2K\x1b[1A${imageSequence}\x1b[3G\x1b[Ktitle\r\n\x1b[3G\x1b[Kline1`),
+				"reserved rows should be pre-cleared, then the image and its companion text drawn without erasing",
+			);
+			assert.ok(
+				!writes.includes(`${imageSequence}\r\n\x1b[2K`),
+				"companion row clears must not run after the image placement is drawn",
+			);
+
+			tui.stop();
+		} finally {
+			resetCapabilitiesCache();
+			setCellDimensions({ widthPx: 9, heightPx: 18 });
+		}
+	});
+
+	it("redraws the whole image block when only a companion row changes", async () => {
+		setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+		setCellDimensions({ widthPx: 10, heightPx: 10 });
+		try {
+			const terminal = new LoggingVirtualTerminal(40, 10);
+			const tui: TUI = new TuiMainScreen(terminal);
+			const component = new TestComponent();
+			tui.addChild(component);
+
+			const image = new Image(
+				"AAAA",
+				"image/png",
+				{ fallbackColor: (value) => value },
+				{ maxWidthCells: 2 },
+				{ widthPx: 20, heightPx: 20 },
+			);
+			const imageSequence = image.render(40)[0]!;
+			component.lines = [
+				`${imageSequence}\x1b[3G\x1b[Ktitle`,
+				`${IMAGE_COMPANION_MARKER}\x1b[3G\x1b[Kline1`,
+				"after",
+			];
+			tui.start();
+			await terminal.waitForRender();
+			terminal.clearWrites();
+
+			component.lines = [
+				`${imageSequence}\x1b[3G\x1b[Ktitle`,
+				`${IMAGE_COMPANION_MARKER}\x1b[3G\x1b[Kchanged`,
+				"after",
+			];
+			tui.requestRender();
+			await terminal.waitForRender();
+
+			const writes = terminal.getWrites();
+			assert.ok(
+				writes.includes(`\x1b[2K\r\n\x1b[2K\x1b[1A${imageSequence}\x1b[3G\x1b[Ktitle\r\n\x1b[3G\x1b[Kchanged`),
+				"changing a companion row should re-emit the image line and all companion rows",
+			);
+
+			tui.stop();
+		} finally {
+			resetCapabilitiesCache();
+			setCellDimensions({ widthPx: 9, heightPx: 18 });
+		}
 	});
 });
 

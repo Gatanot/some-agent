@@ -10,6 +10,7 @@ import { getKeybindings, KeybindingsManager, setKeybindings, TUI_KEYBINDINGS } f
 import {
 	encodeKitty,
 	hyperlink,
+	IMAGE_COMPANION_MARKER,
 	registerKittyImageMetadata,
 	resetCapabilitiesCache,
 	setCapabilities,
@@ -769,6 +770,92 @@ describe("TuiAltScreen", () => {
 			assert.ok(!redrawWrites.includes("\x1b_Ga=T"));
 			assert.ok(redrawWrites.length < 2000, `expected placement-only redraw, got ${redrawWrites.length} bytes`);
 			assert.ok(terminal.getViewport().some((line) => line.trimEnd() === "changed"));
+			tui.stop();
+		} finally {
+			resetCapabilitiesCache();
+		}
+	});
+
+	it("writes image companion rows without erasing the placed image", async () => {
+		setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+		try {
+			const terminal = new RecordingTerminal(20, 6);
+			const tui = new TuiAltScreen(terminal);
+			const imageId = 4242;
+			const imageLine = encodeKitty("AAAA", { columns: 2, rows: 2, imageId, moveCursor: false });
+			registerKittyImageMetadata({ imageId, columns: 2, rows: 2, widthPx: 100, heightPx: 100 });
+			tui.setLayoutRoot(
+				new VStack([
+					{
+						component: {
+							render: () => [
+								`${imageLine}\x1b[3G\x1b[Ktitle`,
+								`${IMAGE_COMPANION_MARKER}\x1b[3G\x1b[Kline1`,
+								"after",
+							],
+							invalidate: () => {},
+						},
+						basis: "auto",
+					},
+				]),
+			);
+			tui.start();
+			await terminal.waitForRender();
+
+			const writes = terminal.events
+				.filter((event): event is { type: "write"; data: string } => event.type === "write")
+				.map((event) => event.data)
+				.join("");
+			assert.ok(
+				writes.includes(`\x1b[1;1H\x1b[2K${imageLine}\x1b[3G\x1b[Ktitle`),
+				"image row should be cleared before the placement is drawn",
+			);
+			assert.ok(
+				!writes.includes(`\x1b[2;1H\x1b[2K\x1b[3G\x1b[Kline1`),
+				"companion row must not be erase-lined after the image is placed",
+			);
+			assert.ok(writes.includes(`\x1b[2;1H\x1b[3G\x1b[Kline1`), "companion text should still be written");
+			assert.ok(!writes.includes(IMAGE_COMPANION_MARKER), "companion marker should be stripped from output");
+
+			// Changing only a companion row must repaint the whole block: the
+			// placement is reset first, then the image row and companion rows are
+			// re-emitted with the companion rows still un-erased.
+			const eventCount = terminal.events.length;
+			tui.setLayoutRoot(
+				new VStack([
+					{
+						component: {
+							render: () => [
+								`${imageLine}\x1b[3G\x1b[Ktitle`,
+								`${IMAGE_COMPANION_MARKER}\x1b[3G\x1b[Kchanged`,
+								"after",
+							],
+							invalidate: () => {},
+						},
+						basis: "auto",
+					},
+				]),
+			);
+			tui.requestRender();
+			await terminal.waitForRender();
+			const redrawWrites = terminal.events
+				.slice(eventCount)
+				.filter((event): event is { type: "write"; data: string } => event.type === "write")
+				.map((event) => event.data)
+				.join("");
+			assert.ok(
+				redrawWrites.includes("\x1b_Ga=d,d=a,q=2\x1b\\"),
+				"changing a companion row should reset image placements",
+			);
+			assert.ok(
+				redrawWrites.includes(`\x1b[2;1H\x1b[3G\x1b[Kchanged`),
+				"changed companion row should be rewritten without erase-line",
+			);
+			assert.ok(
+				!redrawWrites.includes(`\x1b[2;1H\x1b[2K\x1b[3G\x1b[Kchanged`),
+				"companion row must not be erase-lined during redraw",
+			);
+
 			tui.stop();
 		} finally {
 			resetCapabilitiesCache();

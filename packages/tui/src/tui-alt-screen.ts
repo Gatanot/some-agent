@@ -23,9 +23,11 @@ import {
 	deleteKittyImage,
 	getCapabilities,
 	getKittyImagePlacement,
+	hasImageCompanionMarker,
 	type ImageProtocol,
 	isImageLine,
 	setCapabilities,
+	stripImageCompanionMarker,
 	type TerminalCapabilities,
 } from "./terminal-image.ts";
 import {
@@ -1333,7 +1335,11 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
 			this.previousScreen.length === 0 || this.previousScreenWidth !== width || this.previousScreenHeight !== height;
 		const imagesNeedRedraw = screen.some(
 			(line, row) =>
-				line !== this.previousScreen[row] && (isImageLine(line) || isImageLine(this.previousScreen[row] ?? "")),
+				line !== this.previousScreen[row] &&
+				(isImageLine(line) ||
+					isImageLine(this.previousScreen[row] ?? "") ||
+					hasImageCompanionMarker(line) ||
+					hasImageCompanionMarker(this.previousScreen[row] ?? "")),
 		);
 		const redrawImages = fullRedraw || imagesNeedRedraw;
 		const hadUploadedKittyImages = this.uploadedKittyImages.size > 0;
@@ -1358,7 +1364,13 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
 
 		for (let row = 0; row < height; row++) {
 			if (!fullRedraw && !imagesNeedRedraw && screen[row] === this.previousScreen[row]) continue;
-			buffer += `\x1b[${row + 1};1H\x1b[2K${preparedKittyScreen.lines[row] ?? ""}`;
+			const line = preparedKittyScreen.lines[row] ?? "";
+			buffer += `\x1b[${row + 1};1H`;
+			// Companion rows of an image block carry text to the right of the image;
+			// erasing the row would destroy the placed image, so write them as-is
+			// (their erase-to-end-of-line is baked into the row content).
+			if (!hasImageCompanionMarker(line)) buffer += "\x1b[2K";
+			buffer += stripImageCompanionMarker(line);
 		}
 
 		if (cursorPos) {

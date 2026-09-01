@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { deleteKittyImage, isImageLine } from "./terminal-image.ts";
+import { deleteKittyImage, isImageLine, stripImageCompanionMarker } from "./terminal-image.ts";
 import { type TUI, TuiBase, type TuiStopOptions } from "./tui.ts";
 import { visibleWidth } from "./utils.ts";
 
@@ -196,14 +196,34 @@ export class TuiMainScreen extends TuiBase implements TUI {
 		const rows = extractKittyImageRows(lines[index] ?? "");
 		if (rows <= 1) return 1;
 
-		const maxRows = Math.min(rows, maxIndex - index + 1, lines.length - index);
-		let reservedRows = 1;
-		while (reservedRows < maxRows) {
-			const line = lines[index + reservedRows] ?? "";
-			if (isImageLine(line) || visibleWidth(line) > 0) break;
-			reservedRows++;
+		// Reserve the image's full row extent. The rows below the image line are
+		// part of the image block even when they carry companion text rendered to
+		// the right of the image, so they must not be cleared after placement.
+		return Math.max(1, Math.min(rows, maxIndex - index + 1, lines.length - index));
+	}
+
+	/**
+	 * Move past an image block's reserved rows. Rows carrying companion text
+	 * (rendered to the right of the image) are written in place without an
+	 * erase-line, since erasing after the placement would destroy the image.
+	 * Blocks without companion content keep the plain cursor jump.
+	 */
+	private appendImageBlockRows(output: BoundedTerminalWriter, lines: string[], index: number, rows: number): void {
+		let hasCompanionContent = false;
+		for (let row = 1; row < rows; row++) {
+			if (visibleWidth(lines[index + row] ?? "") > 0) {
+				hasCompanionContent = true;
+				break;
+			}
 		}
-		return reservedRows;
+		if (!hasCompanionContent) {
+			output.append(`\x1b[${rows - 1}B`);
+			return;
+		}
+		for (let row = 1; row < rows; row++) {
+			output.append("\r\n");
+			output.append(stripImageCompanionMarker(lines[index + row] ?? ""));
+		}
 	}
 
 	private expandChangedRangeForKittyImages(
@@ -292,7 +312,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
 					}
 					output.append(`\x1b[${imageReservedRows - 1}A`);
 					output.append(line);
-					output.append(`\x1b[${imageReservedRows - 1}B`);
+					this.appendImageBlockRows(output, newLines, i, imageReservedRows);
 					i += imageReservedRows - 1;
 					continue;
 				}
@@ -507,7 +527,9 @@ export class TuiMainScreen extends TuiBase implements TUI {
 				}
 				output.append(`\x1b[${imageReservedRows - 1}A`);
 				output.append(line);
-				output.append(`\x1b[${imageReservedRows - 1}B`);
+				// The pre-clear above already wiped stale content; companion rows are
+				// written without an erase-line so the just-placed image survives.
+				this.appendImageBlockRows(output, newLines, i, imageReservedRows);
 				i += imageReservedRows - 1;
 				continue;
 			}

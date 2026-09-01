@@ -59,6 +59,9 @@ const ThemeJsonSchema = Type.Object({
 		toolPendingBg: ColorValueSchema,
 		toolSuccessBg: ColorValueSchema,
 		toolErrorBg: ColorValueSchema,
+		toolPendingBorder: Type.Optional(ColorValueSchema),
+		toolSuccessBorder: Type.Optional(ColorValueSchema),
+		toolErrorBorder: Type.Optional(ColorValueSchema),
 		toolTitle: ColorValueSchema,
 		toolOutput: ColorValueSchema,
 		// Markdown (10 colors)
@@ -131,6 +134,9 @@ export type ThemeColor =
 	| "toolPendingBg"
 	| "toolSuccessBg"
 	| "toolErrorBg"
+	| "toolPendingBorder"
+	| "toolSuccessBorder"
+	| "toolErrorBorder"
 	| "mdHeading"
 	| "mdLink"
 	| "mdLinkUrl"
@@ -337,6 +343,9 @@ function withThemeColorFallbacks(colors: ThemeJson["colors"]): ThemeJson["colors
 	scrollbarThumb: ColorValue;
 	searchMatchBg: ColorValue;
 	searchMatchText: ColorValue;
+	toolPendingBorder: ColorValue;
+	toolSuccessBorder: ColorValue;
+	toolErrorBorder: ColorValue;
 } {
 	return {
 		...colors,
@@ -344,6 +353,11 @@ function withThemeColorFallbacks(colors: ThemeJson["colors"]): ThemeJson["colors
 		scrollbarThumb: colors.scrollbarThumb ?? colors.selectedBg,
 		searchMatchBg: colors.searchMatchBg ?? colors.selectedBg,
 		searchMatchText: colors.searchMatchText ?? colors.text,
+		// Tool state borders fall back to the state background tokens so existing
+		// custom themes keep their current look.
+		toolPendingBorder: colors.toolPendingBorder ?? colors.toolPendingBg,
+		toolSuccessBorder: colors.toolSuccessBorder ?? colors.toolSuccessBg,
+		toolErrorBorder: colors.toolErrorBorder ?? colors.toolErrorBg,
 	};
 }
 

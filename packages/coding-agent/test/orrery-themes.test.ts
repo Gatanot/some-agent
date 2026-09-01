@@ -24,6 +24,9 @@ const REQUIRED_TOKENS = [
 	"toolPendingBg",
 	"toolSuccessBg",
 	"toolErrorBg",
+	"toolPendingBorder",
+	"toolSuccessBorder",
+	"toolErrorBorder",
 	"toolTitle",
 	"toolOutput",
 	"mdHeading",
@@ -127,6 +130,9 @@ const CONTRAST_PAIRS: Array<{ fg: string; bg: string; min: number }> = [
 	{ fg: "toolOutput", bg: "toolPendingBg", min: 4.5 },
 	{ fg: "toolTitle", bg: "toolSuccessBg", min: 4.5 },
 	{ fg: "toolTitle", bg: "toolErrorBg", min: 4.5 },
+	{ fg: "toolPendingBorder", bg: "userMessageBg", min: 3 },
+	{ fg: "toolSuccessBorder", bg: "userMessageBg", min: 3 },
+	{ fg: "toolErrorBorder", bg: "userMessageBg", min: 3 },
 	{ fg: "toolDiffAdded", bg: "toolSuccessBg", min: 3 },
 	{ fg: "toolDiffRemoved", bg: "toolErrorBg", min: 3 },
 	{ fg: "accent", bg: "selectedBg", min: 3 },
@@ -143,7 +149,7 @@ describe("Orrery themes", () => {
 	for (const file of THEME_FILES) {
 		const theme = readTheme(file);
 
-		it(`${file}: defines all 51 required color tokens`, () => {
+		it(`${file}: defines all 54 required color tokens`, () => {
 			const missing = REQUIRED_TOKENS.filter((token) => !(token in theme.colors));
 			expect(missing, `missing tokens: ${missing.join(", ")}`).toEqual([]);
 		});

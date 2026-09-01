@@ -160,13 +160,13 @@ vim ~/.pi/agent/themes/my-theme.json
 
 - `name` is required, must be unique, and must not contain `/`.
 - `vars` is optional. Define reusable colors here, then reference them in `colors`.
-- `colors` must define all 51 required tokens. `thinkingMax`, `scrollbarThumb`, and the two search highlight tokens are optional and use the fallbacks listed below.
+- `colors` must define all 51 required tokens. `thinkingMax`, `scrollbarThumb`, the two search highlight tokens, and the three tool border tokens are optional and use the fallbacks listed below.
 
 The `$schema` field enables editor auto-completion and validation.
 
 ## Color Tokens
 
-Every theme must define all 51 required color tokens. The optional tokens preserve compatibility with existing themes: `thinkingMax` falls back to `thinkingXhigh`, `scrollbarThumb` and `searchMatchBg` fall back to `selectedBg`, and `searchMatchText` falls back to `text`. Other search matches use `searchMatchText` on `searchMatchBg` with an underline; the current match reverses that foreground/background pair and uses bold text.
+Every theme must define all 51 required color tokens. The optional tokens preserve compatibility with existing themes: `thinkingMax` falls back to `thinkingXhigh`, `scrollbarThumb` and `searchMatchBg` fall back to `selectedBg`, `searchMatchText` falls back to `text`, and the tool border tokens (`toolPendingBorder`, `toolSuccessBorder`, `toolErrorBorder`) fall back to their `tool*Bg` counterparts. Other search matches use `searchMatchText` on `searchMatchBg` with an underline; the current match reverses that foreground/background pair and uses bold text.
 
 ### Core UI (11 colors)
 
@@ -197,9 +197,12 @@ Every theme must define all 51 required color tokens. The optional tokens preser
 | `customMessageBg` | Extension message background |
 | `customMessageText` | Extension message text |
 | `customMessageLabel` | Extension message label |
-| `toolPendingBg` | Tool box (pending) |
-| `toolSuccessBg` | Tool box (success) |
-| `toolErrorBg` | Tool box (error) |
+| `toolPendingBg` | Tool box background (pending) |
+| `toolSuccessBg` | Tool box background (success) |
+| `toolErrorBg` | Tool box background (error) |
+| `toolPendingBorder` | Tool box border (pending); falls back to `toolPendingBg` |
+| `toolSuccessBorder` | Tool box border (success); falls back to `toolSuccessBg` |
+| `toolErrorBorder` | Tool box border (error); falls back to `toolErrorBg` |
 | `toolTitle` | Tool title |
 | `toolOutput` | Tool output text |
 

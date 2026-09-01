@@ -77,7 +77,7 @@ export class ToolExecutionComponent extends Container {
 		// Always create all shell variants. contentBox is used for default renderer-based composition.
 		// selfRenderContainer is used when the tool renders its own framing.
 		// contentText is reserved for generic fallback rendering when no tool definition exists.
-		this.contentBox = new BorderedBox(1, 1, (text: string) => theme.fg("toolPendingBg", text));
+		this.contentBox = new BorderedBox(1, 1, (text: string) => theme.fg("toolPendingBorder", text));
 		this.contentText = new Text("", 0, 0);
 		this.selfRenderContainer = new Container();
 
@@ -275,10 +275,10 @@ export class ToolExecutionComponent extends Container {
 
 	private updateDisplay(): void {
 		const borderFn = this.isPartial
-			? (text: string) => theme.fg("toolPendingBg", text)
+			? (text: string) => theme.fg("toolPendingBorder", text)
 			: this.result?.isError
-				? (text: string) => theme.fg("toolErrorBg", text)
-				: (text: string) => theme.fg("toolSuccessBg", text);
+				? (text: string) => theme.fg("toolErrorBorder", text)
+				: (text: string) => theme.fg("toolSuccessBorder", text);
 
 		let hasContent = false;
 		this.hideComponent = false;

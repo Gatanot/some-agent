@@ -181,6 +181,18 @@
 					"$ref": "#/$defs/colorValue",
 					"description": "Tool execution box (error state)"
 				},
+				"toolPendingBorder": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Tool execution box border (pending state); falls back to toolPendingBg"
+				},
+				"toolSuccessBorder": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Tool execution box border (success state); falls back to toolSuccessBg"
+				},
+				"toolErrorBorder": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Tool execution box border (error state); falls back to toolErrorBg"
+				},
 				"toolTitle": {
 					"$ref": "#/$defs/colorValue",
 					"description": "Tool execution box title color"

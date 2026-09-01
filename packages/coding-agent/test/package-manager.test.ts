@@ -3,7 +3,8 @@ import { existsSync, mkdirSync, rmSync, statSync, symlinkSync, writeFileSync } f
 import { tmpdir } from "node:os";
 import { join, relative } from "node:path";
 import { PassThrough } from "node:stream";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { setBundledExtensionsDirOverride } from "../src/core/extensions/bundled-dir.ts";
 import { DefaultPackageManager, type ProgressEvent, type ResolvedResource } from "../src/core/package-manager.ts";
 import { SettingsManager } from "../src/core/settings-manager.ts";
 
@@ -72,6 +73,15 @@ describe("DefaultPackageManager", () => {
 	let settingsManager: SettingsManager;
 	let packageManager: DefaultPackageManager;
 	let previousOfflineEnv: string | undefined;
+
+	beforeAll(() => {
+		// Keep package manager unit tests independent of the bundled extension.
+		setBundledExtensionsDirOverride(null);
+	});
+
+	afterAll(() => {
+		setBundledExtensionsDirOverride(undefined);
+	});
 
 	beforeEach(() => {
 		previousOfflineEnv = process.env.PI_OFFLINE;

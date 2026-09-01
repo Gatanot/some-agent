@@ -6,7 +6,7 @@ import { createInMemoryModelRegistry } from "./model-runtime-test-utils.ts";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthStorage } from "../src/core/auth-storage.ts";
 import { createEventBus } from "../src/core/event-bus.ts";
 import {
@@ -14,6 +14,7 @@ import {
 	discoverAndLoadExtensions,
 	loadExtensionFromFactory,
 	loadExtensions,
+	setBundledExtensionsDirOverride,
 } from "../src/core/extensions/loader.ts";
 import { ExtensionRunner, emitProjectTrustEvent } from "../src/core/extensions/runner.ts";
 import type {
@@ -35,6 +36,15 @@ describe("ExtensionRunner", () => {
 	let sessionManager: SessionManager;
 	let modelRegistry: ModelRegistry;
 	const defaultKeybindings = new KeybindingsManager().getEffectiveConfig();
+
+	beforeAll(() => {
+		// Keep runner unit tests independent of the bundled extension.
+		setBundledExtensionsDirOverride(null);
+	});
+
+	afterAll(() => {
+		setBundledExtensionsDirOverride(undefined);
+	});
 
 	beforeEach(async () => {
 		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-runner-test-"));

@@ -11,6 +11,9 @@ import type { Provider } from "@earendil-works/pi-ai";
 import type { KeyId } from "@earendil-works/pi-tui";
 import type { createJiti } from "jiti";
 import { CONFIG_DIR_NAME, getAgentDir, isBunBinary, isBundledNode } from "../../config.ts";
+import { getBundledExtensionsDir } from "./bundled-dir.ts";
+
+export { getBundledExtensionsDir, setBundledExtensionsDirOverride } from "./bundled-dir.ts";
 import { resolvePath } from "../../utils/paths.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
 import type { ExecOptions } from "../exec.ts";
@@ -766,6 +769,12 @@ export async function discoverAndLoadExtensions(
 			}
 		}
 	};
+
+	// 0. Bundled extensions shipped inside the @gatanot/orrery package.
+	const bundledExtensionsDir = getBundledExtensionsDir();
+	if (bundledExtensionsDir) {
+		addPaths(discoverExtensionsInDir(bundledExtensionsDir));
+	}
 
 	// 1. Project-local extensions: cwd/${CONFIG_DIR_NAME}/extensions/
 	const localExtDir = path.join(resolvedCwd, CONFIG_DIR_NAME, "extensions");

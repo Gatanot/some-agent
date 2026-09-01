@@ -35,6 +35,7 @@
 		"!dist/cli/experimental",
 		"docs",
 		"examples",
+		"extensions",
 		"containerization.md",
 		"CHANGELOG.md",
 		"npm-shrinkwrap.json"

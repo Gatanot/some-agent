@@ -1,6 +1,6 @@
 import type { AgentToolResult } from "@earendil-works/pi-agent-core";
 import {
-	Box,
+	BorderedBox,
 	type Component,
 	Container,
 	getCapabilities,
@@ -45,7 +45,7 @@ export interface ToolExecutionOptions {
 }
 
 export class ToolExecutionComponent extends Container {
-	private contentBox: Box;
+	private contentBox: BorderedBox;
 	private contentText: Text;
 	private contentTextRegion: MouseRegion;
 	private selfRenderContainer: Container;
@@ -102,15 +102,16 @@ export class ToolExecutionComponent extends Container {
 		// Always create all shell variants. contentBox is used for default renderer-based composition.
 		// selfRenderContainer is used when the tool renders its own framing.
 		// contentText is reserved for generic fallback rendering when no tool definition exists.
-		this.contentBox = new Box(1, 1, (text: string) => theme.bg("toolPendingBg", text));
-		this.contentText = new Text("", 1, 1, (text: string) => theme.bg("toolPendingBg", text));
+		this.contentBox = new BorderedBox(1, 1, (text: string) => theme.fg("toolPendingBg", text));
+		this.contentText = new Text("", 0, 0);
 		this.contentTextRegion = this.createResultRegion(this.contentText);
 		this.selfRenderContainer = new Container();
 
 		if (this.hasRendererDefinition()) {
 			this.addChild(this.getRenderShell() === "self" ? this.selfRenderContainer : this.contentBox);
 		} else {
-			this.addChild(this.contentTextRegion);
+			this.contentBox.addChild(this.contentTextRegion);
+			this.addChild(this.contentBox);
 		}
 
 		this.updateDisplay();
@@ -307,18 +308,18 @@ export class ToolExecutionComponent extends Container {
 	}
 
 	private updateDisplay(): void {
-		const bgFn = this.isPartial
-			? (text: string) => theme.bg("toolPendingBg", text)
+		const borderFn = this.isPartial
+			? (text: string) => theme.fg("toolPendingBg", text)
 			: this.result?.isError
-				? (text: string) => theme.bg("toolErrorBg", text)
-				: (text: string) => theme.bg("toolSuccessBg", text);
+				? (text: string) => theme.fg("toolErrorBg", text)
+				: (text: string) => theme.fg("toolSuccessBg", text);
 
 		let hasContent = false;
 		this.hideComponent = false;
 		if (this.hasRendererDefinition()) {
 			const renderContainer = this.getRenderShell() === "self" ? this.selfRenderContainer : this.contentBox;
-			if (renderContainer instanceof Box) {
-				renderContainer.setBgFn(bgFn);
+			if (renderContainer instanceof BorderedBox) {
+				renderContainer.setBorderFn(borderFn);
 			}
 			renderContainer.clear();
 
@@ -369,7 +370,6 @@ export class ToolExecutionComponent extends Container {
 				}
 			}
 		} else {
-			this.contentText.setCustomBgFn(bgFn);
 			this.contentText.setText(this.formatToolExecution());
 			hasContent = true;
 		}

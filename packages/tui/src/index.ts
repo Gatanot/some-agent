@@ -105,7 +105,9 @@ export {
 	getJpegDimensions,
 	getPngDimensions,
 	getWebpDimensions,
+	hasImageCompanionMarker,
 	hyperlink,
+	IMAGE_COMPANION_MARKER,
 	type ImageDimensions,
 	type ImageProtocol,
 	type ImageRenderOptions,
@@ -115,6 +117,7 @@ export {
 	setCapabilities,
 	setCapabilityOverrides,
 	setCellDimensions,
+	stripImageCompanionMarker,
 	type TerminalCapabilities,
 } from "./terminal-image.ts";
 export {

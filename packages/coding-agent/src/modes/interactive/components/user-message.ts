@@ -1,4 +1,4 @@
-import { Box, Container, Markdown, type MarkdownTheme } from "@earendil-works/pi-tui";
+import { BorderedBox, Container, Markdown, type MarkdownTheme } from "@earendil-works/pi-tui";
 import type { MarkdownTransformer } from "../../../core/extensions/types.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 import { createMarkdownTransform } from "./markdown-transform.ts";
@@ -37,7 +37,9 @@ export class UserMessageComponent extends Container {
 
 	private rebuild(): void {
 		this.clear();
-		const contentBox = new Box(this.outputPad, 1, (content: string) => theme.bg("userMessageBg", content));
+		// Bordered card without background fill, matching the tool execution boxes.
+		// paddingY=0 keeps the previous card height (border rows replace padding).
+		const contentBox = new BorderedBox(this.outputPad, 0, (text: string) => theme.fg("border", text));
 		contentBox.addChild(
 			new Markdown(
 				this.text,

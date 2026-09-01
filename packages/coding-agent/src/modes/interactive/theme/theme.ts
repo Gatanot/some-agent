@@ -61,6 +61,9 @@ export type ThemeColor =
 	| "toolPendingBg"
 	| "toolSuccessBg"
 	| "toolErrorBg"
+	| "toolPendingBorder"
+	| "toolSuccessBorder"
+	| "toolErrorBorder"
 	| "mdHeading"
 	| "mdLink"
 	| "mdLinkUrl"
@@ -267,6 +270,9 @@ function withThemeColorFallbacks(colors: ThemeJson["colors"]): ThemeJson["colors
 	thinkingMax: ColorValue;
 	searchMatchBg: ColorValue;
 	searchMatchText: ColorValue;
+	toolPendingBorder: ColorValue;
+	toolSuccessBorder: ColorValue;
+	toolErrorBorder: ColorValue;
 } {
 	return {
 		...colors,
@@ -275,6 +281,11 @@ function withThemeColorFallbacks(colors: ThemeJson["colors"]): ThemeJson["colors
 		thinkingMax: colors.thinkingMax ?? colors.thinkingXhigh,
 		searchMatchBg: colors.searchMatchBg ?? colors.selectedBg,
 		searchMatchText: colors.searchMatchText ?? colors.text,
+		// Tool state borders fall back to the state background tokens so existing
+		// custom themes keep their current look.
+		toolPendingBorder: colors.toolPendingBorder ?? colors.toolPendingBg,
+		toolSuccessBorder: colors.toolSuccessBorder ?? colors.toolSuccessBg,
+		toolErrorBorder: colors.toolErrorBorder ?? colors.toolErrorBg,
 	};
 }
 

@@ -80,7 +80,7 @@ Theme colors describe interface roles rather than individual components. Use the
 | General interface | `accent`, `border*`, `text`, `muted`, `dim`, `success`, `error`, `warning` |
 | Selection and fullscreen | `selectedBg`, `searchMatch*`, `scrollbar*` |
 | Messages | `userMessage*`, `customMessage*`, `thinkingText` |
-| Tool execution | `toolPendingBg`, `toolSuccessBg`, `toolErrorBg`, `toolTitle`, `toolOutput` |
+| Tool execution | `toolPendingBg`, `toolSuccessBg`, `toolErrorBg`, `toolPendingBorder`, `toolSuccessBorder`, `toolErrorBorder`, `toolTitle`, `toolOutput` |
 | Markdown | `md*` |
 | Tool diffs | `toolDiff*` |
 | Syntax highlighting | `syntax*` |
@@ -89,7 +89,7 @@ Theme colors describe interface roles rather than individual components. Use the
 
 The schema is the format reference. The built-in themes provide complete values that you can copy and adjust.
 
-Five colors are optional and inherit another color when omitted:
+Eight colors are optional and inherit another color when omitted:
 
 | Optional color | Fallback |
 |---|---|
@@ -98,6 +98,9 @@ Five colors are optional and inherit another color when omitted:
 | `searchMatchBg` | `selectedBg` |
 | `searchMatchText` | `text` |
 | `thinkingMax` | `thinkingXhigh` |
+| `toolPendingBorder` | `toolPendingBg` |
+| `toolSuccessBorder` | `toolSuccessBg` |
+| `toolErrorBorder` | `toolErrorBg` |
 
 If `export` colors are omitted, Pi derives HTML page and panel backgrounds from `userMessageBg`.
 

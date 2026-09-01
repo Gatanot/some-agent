@@ -47,6 +47,9 @@
 		"toolPendingBg": "bgPending",
 		"toolSuccessBg": "bgSuccess",
 		"toolErrorBg": "bgError",
+		"toolPendingBorder": "cyan",
+		"toolSuccessBorder": "green",
+		"toolErrorBorder": "red",
 		"toolTitle": "textDark",
 		"toolOutput": "mutedGray",
 

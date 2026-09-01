@@ -3,7 +3,11 @@ import { homedir } from "node:os";
 import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 
-export type ImageProtocol = "kitty" | "iterm2" | null;
+export { encodePngToSixel } from "./sixel.ts";
+
+import { encodePngToSixel } from "./sixel.ts";
+
+export type ImageProtocol = "kitty" | "iterm2" | "sixel" | null;
 
 export interface TerminalCapabilities {
 	images: ImageProtocol;
@@ -107,7 +111,11 @@ function detectCapabilitiesFromEnvironment(tmuxForwardsHyperlink: () => boolean)
 	}
 
 	if (process.env.WT_SESSION) {
-		return { images: null, trueColor: true, hyperlinks: true };
+		// Windows Terminal 1.22+ renders inline images through the Sixel graphics
+		// protocol (DEC STD 070). Legacy conhost does not set WT_SESSION, so
+		// legacy consoles keep the pixel-art fallback. Disable with
+		// PI_IMAGE_PROTOCOL=none or terminal.images: false on older versions.
+		return { images: "sixel", trueColor: true, hyperlinks: true };
 	}
 
 	if (termProgram === "vscode") {
@@ -147,7 +155,7 @@ export function detectCapabilities(tmuxForwardsHyperlink: () => boolean = probeT
 	);
 	const imageProtocol = process.env.PI_IMAGE_PROTOCOL?.toLowerCase();
 	const images =
-		imageProtocol === "kitty" || imageProtocol === "iterm2"
+		imageProtocol === "kitty" || imageProtocol === "iterm2" || imageProtocol === "sixel"
 			? imageProtocol
 			: imageProtocol === "none" || imageProtocol === "0"
 				? null
@@ -196,14 +204,15 @@ export function setCapabilities(caps: TerminalCapabilities): void {
 
 const KITTY_PREFIX = "\x1b_G";
 const ITERM2_PREFIX = "\x1b]1337;File=";
+const SIXEL_PREFIX = "\x1bP0;0;q";
 
 export function isImageLine(line: string): boolean {
 	// Fast path: sequence at line start (single-row images)
-	if (line.startsWith(KITTY_PREFIX) || line.startsWith(ITERM2_PREFIX)) {
+	if (line.startsWith(KITTY_PREFIX) || line.startsWith(ITERM2_PREFIX) || line.startsWith(SIXEL_PREFIX)) {
 		return true;
 	}
 	// Slow path: sequence elsewhere (multi-row images have cursor-up prefix)
-	return line.includes(KITTY_PREFIX) || line.includes(ITERM2_PREFIX);
+	return line.includes(KITTY_PREFIX) || line.includes(ITERM2_PREFIX) || line.includes(SIXEL_PREFIX);
 }
 
 /**
@@ -669,6 +678,17 @@ export function renderImage(
 			preserveAspectRatio: options.preserveAspectRatio ?? true,
 		});
 		return { sequence, columns: size.columns, rows: size.rows };
+	}
+
+	if (caps.images === "sixel") {
+		const cell = getCellDimensions();
+		const widthPx = Math.max(1, Math.floor(size.columns * cell.widthPx));
+		const heightPx = Math.max(1, Math.floor(size.rows * cell.heightPx));
+		const sixel = encodePngToSixel(base64Data, widthPx, heightPx);
+		if (!sixel) {
+			return null;
+		}
+		return { sequence: sixel.data, columns: size.columns, rows: size.rows };
 	}
 
 	return null;

@@ -7,6 +7,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { Image } from "../src/components/image.ts";
+import { encodePngToSixel } from "../src/sixel.ts";
 import {
 	cropKittyImageLine,
 	deleteAllKittyImages,
@@ -406,7 +407,7 @@ describe("detectCapabilities", () => {
 			const caps = detectCapabilities();
 			assert.strictEqual(caps.trueColor, true);
 			assert.strictEqual(caps.hyperlinks, true);
-			assert.strictEqual(caps.images, null);
+			assert.strictEqual(caps.images, "sixel");
 		});
 	});
 
@@ -435,6 +436,18 @@ describe("detectCapabilities", () => {
 			assert.strictEqual(caps.hyperlinks, false);
 			assert.strictEqual(caps.images, null);
 		});
+	});
+});
+
+describe("Sixel image encoding", () => {
+	it("encodes a small PNG as a Sixel sequence", () => {
+		const png = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=";
+		const sixel = encodePngToSixel(png, 9, 18);
+		assert.ok(sixel);
+		assert.strictEqual(sixel.widthPx, 9);
+		assert.strictEqual(sixel.heightPx, 9);
+		assert.ok(sixel.data.startsWith("\x1bP0;0;q"));
+		assert.ok(sixel.data.endsWith("\x1b\\"));
 	});
 });
 

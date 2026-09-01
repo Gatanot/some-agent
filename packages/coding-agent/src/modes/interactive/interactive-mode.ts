@@ -29,9 +29,6 @@ import {
 	type Component,
 	Container,
 	fuzzyFilter,
-	getCapabilities,
-	IMAGE_COMPANION_MARKER,
-	Image,
 	Markdown,
 	matchesKey,
 	ProcessTerminal,
@@ -53,7 +50,6 @@ import {
 	CONFIG_DIR_NAME,
 	getAgentDir,
 	getAuthPath,
-	getBundledInteractiveAssetPath,
 	getDebugLogPath,
 	getDocsPath,
 	VERSION,
@@ -199,143 +195,6 @@ class ExpandableText extends Text implements Expandable {
 
 	setExpanded(expanded: boolean): void {
 		this.setText(expanded ? this.getExpandedText() : this.getCollapsedText());
-	}
-}
-
-/** Startup icon width in terminal cells (kept small so the splash stays compact). */
-const STARTUP_ICON_WIDTH_CELLS = 10;
-const STARTUP_ICON_FILENAME = "icon.png";
-/** Pixel-art fallback grid: 20 columns x 10 rows, each cell is one half-block over two source pixels. */
-const STARTUP_ICON_ART_FILENAME = "icon-art.json";
-const STARTUP_ICON_ART_COLUMNS = 20;
-const HALF_BLOCK = "\u2580";
-
-let cachedStartupIconBase64: string | undefined;
-let startupIconLoadAttempted = false;
-
-function loadStartupIconBase64(): string | undefined {
-	if (startupIconLoadAttempted) {
-		return cachedStartupIconBase64;
-	}
-	startupIconLoadAttempted = true;
-	try {
-		cachedStartupIconBase64 = fs
-			.readFileSync(getBundledInteractiveAssetPath(STARTUP_ICON_FILENAME))
-			.toString("base64");
-	} catch {
-		cachedStartupIconBase64 = undefined;
-	}
-	return cachedStartupIconBase64;
-}
-
-let cachedStartupIconArt: string[] | undefined;
-let startupIconArtLoadAttempted = false;
-
-/**
- * Load the icon as pre-scaled half-block pixel art rows (truecolor ANSI), so
- * terminals without Kitty image support can still show the icon.
- */
-function loadStartupIconArt(): string[] | undefined {
-	if (startupIconArtLoadAttempted) {
-		return cachedStartupIconArt;
-	}
-	startupIconArtLoadAttempted = true;
-	try {
-		const raw = JSON.parse(
-			fs.readFileSync(getBundledInteractiveAssetPath(STARTUP_ICON_ART_FILENAME), "utf8"),
-		) as number[][][];
-		cachedStartupIconArt = raw.map((row) => {
-			const cells = row.map((cell) => {
-				const [tr, tg, tb, br, bg, bb] = cell;
-				return `\x1b[38;2;${tr};${tg};${tb}m\x1b[48;2;${br};${bg};${bb}m${HALF_BLOCK}`;
-			});
-			return `${cells.join("")}\x1b[0m`;
-		});
-	} catch {
-		cachedStartupIconArt = undefined;
-	}
-	return cachedStartupIconArt;
-}
-
-/**
- * Startup header: the bundled icon on the left with the wordmark and keybinding
- * hints to its right. Prefers a real inline image on Kitty-capable terminals,
- * falls back to truecolor half-block pixel art, then to the ASCII wordmark.
- */
-class StartupHeader implements Component, Expandable {
-	private readonly icon: Image | undefined;
-	private readonly iconArt: string[] | undefined;
-	private readonly text: ExpandableText;
-
-	constructor(
-		iconBase64: string | undefined,
-		iconArt: string[] | undefined,
-		getCollapsedText: () => string,
-		getExpandedText: () => string,
-		expanded: boolean,
-	) {
-		this.icon =
-			iconBase64 === undefined
-				? undefined
-				: new Image(
-						iconBase64,
-						"image/png",
-						{ fallbackColor: (text) => theme.fg("muted", text) },
-						{ maxWidthCells: STARTUP_ICON_WIDTH_CELLS, filename: STARTUP_ICON_FILENAME },
-					);
-		this.iconArt = iconArt;
-		this.text = new ExpandableText(getCollapsedText, getExpandedText, expanded, 1, 0);
-	}
-
-	setExpanded(expanded: boolean): void {
-		this.text.setExpanded(expanded);
-	}
-
-	invalidate(): void {
-		this.text.invalidate();
-		this.icon?.invalidate();
-	}
-
-	render(width: number): string[] {
-		if (this.icon) {
-			const imageLines = this.icon.render(width);
-			const imageRows = imageLines.length;
-			// Text starts one cell past the icon; the icon may render narrower than
-			// its max width on very narrow terminals, which only shifts the gap.
-			const textColumn = STARTUP_ICON_WIDTH_CELLS + 1;
-			const textWidth = Math.max(1, width - textColumn);
-			const textLines = this.text.render(textWidth);
-			const rows = Math.max(imageRows, textLines.length);
-			const result: string[] = [];
-			for (let row = 0; row < rows; row++) {
-				const text = textLines[row] ?? "";
-				if (row === 0) {
-					// The image placement anchors the block at this row; the erase after
-					// the column offset clears stale text without touching image cells.
-					result.push(`${imageLines[0] ?? ""}\x1b[${textColumn}G\x1b[K${text}`);
-				} else if (row < imageRows) {
-					// Companion rows share the image's reserved block: renderers must not
-					// erase them after the image is placed, hence the marker.
-					result.push(`${IMAGE_COMPANION_MARKER}\x1b[${textColumn}G\x1b[K${text}`);
-				} else {
-					result.push(text);
-				}
-			}
-			return result;
-		}
-
-		if (this.iconArt) {
-			const textLines = this.text.render(Math.max(1, width - STARTUP_ICON_ART_COLUMNS - 2));
-			const rows = Math.max(this.iconArt.length, textLines.length);
-			const result: string[] = [];
-			for (let row = 0; row < rows; row++) {
-				const art = this.iconArt[row] ?? " ".repeat(STARTUP_ICON_ART_COLUMNS);
-				result.push(`${art}${textLines[row] ?? ""}`);
-			}
-			return result;
-		}
-
-		return this.text.render(width);
 	}
 }
 
@@ -1114,14 +973,7 @@ export class InteractiveMode {
 					: theme.bold(theme.fg("accent", APP_TITLE))) +
 				"\n" +
 				theme.fg("dim", `v${this.version}`);
-			const titleLine = `${theme.bold(theme.fg("accent", APP_TITLE))} ${theme.fg("dim", `v${this.version}`)}`;
-			// Kitty-capable terminals get the real inline image; truecolor terminals
-			// get half-block pixel art; anything else keeps the ASCII wordmark.
-			const capabilities = getCapabilities();
-			const iconBase64 = wideEnough && capabilities.images === "kitty" ? loadStartupIconBase64() : undefined;
-			const iconArt =
-				wideEnough && iconBase64 === undefined && capabilities.trueColor ? loadStartupIconArt() : undefined;
-			const wordmark = iconBase64 === undefined && iconArt === undefined ? asciiLogo : titleLine;
+			const wordmark = asciiLogo;
 
 			// Build startup instructions using keybinding hint helpers
 			const hint = (keybinding: AppKeybinding, description: string) => keyHint(keybinding, description);
@@ -1162,9 +1014,7 @@ export class InteractiveMode {
 				"dim",
 				`${APP_TITLE} can explain its own features and look up its docs. Ask it how to use or extend ${APP_TITLE}.`,
 			);
-			this.builtInHeader = new StartupHeader(
-				iconBase64,
-				iconArt,
+			this.builtInHeader = new ExpandableText(
 				() => `${wordmark}\n${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
 				() => `${wordmark}\n${expandedInstructions}\n\n${onboarding}`,
 				this.getStartupExpansionState(),

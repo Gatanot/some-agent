@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { deleteKittyImage, isImageLine, stripImageCompanionMarker } from "./terminal-image.ts";
+import { deleteKittyImage, hasImageCompanionMarker, isImageLine, stripImageCompanionMarker } from "./terminal-image.ts";
 import { type TUI, TuiBase, type TuiStopOptions } from "./tui.ts";
 import { visibleWidth } from "./utils.ts";
 
@@ -103,6 +103,40 @@ function extractKittyImageIds(line: string): number[] {
 
 function extractKittyImageRows(line: string): number {
 	return parseKittyImageHeader(line)?.rows ?? 1;
+}
+
+/**
+ * Row count of an iTerm2/Sixel image block whose sequence sits on the block's
+ * last row, prefixed with a cursor-up sequence. Returns 0 when the line is not
+ * a move-up image line (Kitty draws its sequence on the block's first row).
+ */
+function extractMoveUpImageRows(line: string): number {
+	const rest = stripImageCompanionMarker(line);
+	const match = /^\x1b\[(\d+)A/.exec(rest);
+	if (!match || !isImageLine(rest)) return 0;
+	return Number.parseInt(match[1], 10) + 1;
+}
+
+/**
+ * Resolve the reserved row block of a move-up image line, or of a companion row
+ * (marked with IMAGE_COMPANION_MARKER) belonging to such a block. Companion
+ * rows precede the sequence row of the same block.
+ */
+function getMoveUpImageBlock(lines: string[], index: number): { start: number; end: number } | undefined {
+	const rows = extractMoveUpImageRows(lines[index] ?? "");
+	if (rows > 0) {
+		return { start: Math.max(0, index - rows + 1), end: index };
+	}
+	if (!hasImageCompanionMarker(lines[index] ?? "")) return undefined;
+	for (let j = index + 1; j < lines.length && j <= index + 64; j++) {
+		const blockRows = extractMoveUpImageRows(lines[j] ?? "");
+		if (blockRows > 0) {
+			const blockStart = j - blockRows + 1;
+			return blockStart <= index ? { start: blockStart, end: j } : undefined;
+		}
+		if (isImageLine(lines[j] ?? "")) return undefined;
+	}
+	return undefined;
 }
 
 function isTermuxSession(): boolean {
@@ -235,6 +269,18 @@ export class TuiMainScreen extends TuiBase implements TUI {
 		let expandedLastChanged = lastChanged;
 		const expandForLines = (lines: string[]): void => {
 			for (let i = 0; i < lines.length; i++) {
+				// iTerm2/Sixel blocks carry their sequence on the block's last row with
+				// a cursor-up prefix, so the block must be re-emitted atomically from
+				// its first row whenever any block row changes. Companion rows (marked
+				// rows above the sequence row) resolve the same way.
+				const moveUpBlock = getMoveUpImageBlock(lines, i);
+				if (moveUpBlock) {
+					if (i >= firstChanged || (i <= lastChanged && moveUpBlock.end >= firstChanged)) {
+						expandedFirstChanged = Math.min(expandedFirstChanged, moveUpBlock.start);
+						expandedLastChanged = Math.max(expandedLastChanged, moveUpBlock.end);
+					}
+					continue;
+				}
 				if (extractKittyImageIds(lines[i]).length === 0) continue;
 				const blockEnd = i + this.getKittyImageReservedRows(lines, i) - 1;
 				if (i >= firstChanged || (i <= lastChanged && blockEnd >= firstChanged)) {
@@ -316,7 +362,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
 					i += imageReservedRows - 1;
 					continue;
 				}
-				output.append(line);
+				output.append(stripImageCompanionMarker(line));
 			}
 			this.cursorRow = Math.max(0, newLines.length - 1);
 			this.hardwareCursorRow = this.cursorRow;
@@ -563,7 +609,7 @@ export class TuiMainScreen extends TuiBase implements TUI {
 				].join("\n");
 				throw new Error(errorMsg);
 			}
-			output.append(line);
+			output.append(stripImageCompanionMarker(line));
 		}
 
 		// Track where cursor ended up after rendering

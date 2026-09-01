@@ -1357,7 +1357,7 @@ export class TuiAltScreen extends TuiBase implements ViewportTUI {
 					: this.deleteKittyImages();
 			buffer += `${clearImages}\x1b[2J`;
 		} else if (imagesNeedRedraw) {
-			if (this.imageProtocol === "iterm2") buffer += "\x1b[2J";
+			if (this.imageProtocol === "iterm2" || this.imageProtocol === "sixel") buffer += "\x1b[2J";
 			else if (this.imageProtocol === "kitty") buffer += deleteAllKittyPlacements();
 		}
 		buffer += preparedKittyScreen.evictedImageDeletion;

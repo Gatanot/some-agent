@@ -2,14 +2,23 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { discoverAndLoadExtensions } from "../src/core/extensions/loader.ts";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { discoverAndLoadExtensions, setBundledExtensionsDirOverride } from "../src/core/extensions/loader.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 describe("extensions discovery", () => {
 	let tempDir: string;
 	let extensionsDir: string;
+
+	beforeAll(() => {
+		// Keep discovery unit tests independent of the bundled extension.
+		setBundledExtensionsDirOverride(null);
+	});
+
+	afterAll(() => {
+		setBundledExtensionsDirOverride(undefined);
+	});
 
 	beforeEach(() => {
 		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "pi-ext-test-"));
@@ -314,6 +323,22 @@ describe("extensions discovery", () => {
 		expect(result.errors).toHaveLength(0);
 		expect(result.extensions).toHaveLength(1);
 		expect(result.extensions[0].path).toContain("exists.ts");
+	});
+
+	it("discovers bundled extensions from the package extensions dir", async () => {
+		const bundledDir = path.resolve(__dirname, "../extensions");
+		setBundledExtensionsDirOverride(bundledDir);
+		try {
+			const result = await discoverAndLoadExtensions([], tempDir, tempDir);
+			expect(result.errors).toHaveLength(0);
+			const names = result.extensions.map((e) => path.basename(e.path));
+			expect(names).toContain("branding.ts");
+			expect(result.extensions.find((e) => path.basename(e.path) === "branding.ts")?.commands.has("branding")).toBe(
+				true,
+			);
+		} finally {
+			setBundledExtensionsDirOverride(null);
+		}
 	});
 
 	it("loads extensions and registers commands", async () => {

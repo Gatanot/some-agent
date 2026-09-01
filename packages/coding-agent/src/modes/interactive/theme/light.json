@@ -13,9 +13,9 @@
 		"lightGray": "#b0b0b0",
 		"selectedBg": "#d0d0e0",
 		"userMsgBg": "#e8e8e8",
-		"toolPendingBg": "#e8e8f0",
-		"toolSuccessBg": "#e8f0e8",
-		"toolErrorBg": "#f0e8e8",
+		"toolPendingBg": "#c8c8dc",
+		"toolSuccessBg": "#c8dcc8",
+		"toolErrorBg": "#dcc8c8",
 		"customMsgBg": "#ede7f6"
 	},
 	"colors": {
@@ -76,8 +76,8 @@
 		"thinkingLow": "blue",
 		"thinkingMedium": "teal",
 		"thinkingHigh": "#875f87",
-		"thinkingXhigh": "#8b008b",
-		"thinkingMax": "#af005f",
+		"thinkingXhigh": "#8a6196",
+		"thinkingMax": "#9c5c80",
 
 		"bashMode": "green"
 	},

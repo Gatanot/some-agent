@@ -22,6 +22,10 @@ import * as _bundledTypebox from "typebox";
 import * as _bundledTypeboxCompile from "typebox/compile";
 import * as _bundledTypeboxValue from "typebox/value";
 import { CONFIG_DIR_NAME, getAgentDir, isBunBinary } from "../../config.ts";
+import { getBundledExtensionsDir } from "./bundled-dir.ts";
+
+export { getBundledExtensionsDir, setBundledExtensionsDirOverride } from "./bundled-dir.ts";
+
 // NOTE: This import works because loader.ts exports are NOT re-exported from index.ts,
 // avoiding a circular dependency. Extensions can import from @earendil-works/pi-coding-agent.
 import * as _bundledPiCodingAgent from "../../index.ts";
@@ -775,6 +779,12 @@ export async function discoverAndLoadExtensions(
 			}
 		}
 	};
+
+	// 0. Bundled extensions shipped inside the @gatanot/orrery package.
+	const bundledExtensionsDir = getBundledExtensionsDir();
+	if (bundledExtensionsDir) {
+		addPaths(discoverExtensionsInDir(bundledExtensionsDir));
+	}
 
 	// 1. Project-local extensions: cwd/${CONFIG_DIR_NAME}/extensions/
 	const localExtDir = path.join(resolvedCwd, CONFIG_DIR_NAME, "extensions");

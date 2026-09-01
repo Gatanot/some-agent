@@ -128,6 +128,9 @@ export type ThemeColor =
 	| "customMessageLabel"
 	| "toolTitle"
 	| "toolOutput"
+	| "toolPendingBg"
+	| "toolSuccessBg"
+	| "toolErrorBg"
 	| "mdHeading"
 	| "mdLink"
 	| "mdLinkUrl"
@@ -467,17 +470,19 @@ export class Theme {
 // Theme Loading
 // ============================================================================
 
+const BUILTIN_THEME_NAMES = ["dark", "light", "orrery-dark", "orrery-light"] as const;
+
 let BUILTIN_THEMES: Record<string, ThemeJson> | undefined;
 
 function getBuiltinThemes(): Record<string, ThemeJson> {
 	if (!BUILTIN_THEMES) {
 		const themesDir = getThemesDir();
-		const darkPath = path.join(themesDir, "dark.json");
-		const lightPath = path.join(themesDir, "light.json");
-		BUILTIN_THEMES = {
-			dark: JSON.parse(stripBom(fs.readFileSync(darkPath, "utf-8"))) as ThemeJson,
-			light: JSON.parse(stripBom(fs.readFileSync(lightPath, "utf-8"))) as ThemeJson,
-		};
+		const builtinThemes: Record<string, ThemeJson> = {};
+		for (const name of BUILTIN_THEME_NAMES) {
+			const themePath = path.join(themesDir, `${name}.json`);
+			builtinThemes[name] = JSON.parse(stripBom(fs.readFileSync(themePath, "utf-8"))) as ThemeJson;
+		}
+		BUILTIN_THEMES = builtinThemes;
 	}
 	return BUILTIN_THEMES;
 }
@@ -644,6 +649,11 @@ function createTheme(themeJson: ThemeJson, mode?: ColorMode, sourcePath?: string
 	for (const [key, value] of Object.entries(resolvedColors)) {
 		if (bgColorKeys.has(key)) {
 			bgColors[key as ThemeBg] = value;
+			// Tool state tokens double as foreground colors for border-style
+			// rendering (e.g. tool card outlines).
+			if (key === "toolPendingBg" || key === "toolSuccessBg" || key === "toolErrorBg") {
+				fgColors[key as ThemeColor] = value;
+			}
 		} else {
 			fgColors[key as ThemeColor] = value;
 		}

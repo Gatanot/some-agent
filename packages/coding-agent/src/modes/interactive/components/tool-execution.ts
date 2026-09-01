@@ -213,7 +213,9 @@ export class ToolExecutionComponent extends Container {
 
 	private maybeConvertImagesForKitty(): void {
 		const caps = getCapabilities();
-		if (caps.images !== "kitty") return;
+		// Kitty and Sixel require PNG data for inline rendering (Sixel decodes PNG
+		// client-side); other protocols can pass the original data through.
+		if (caps.images !== "kitty" && caps.images !== "sixel") return;
 		if (!this.result) return;
 
 		const imageBlocks = this.result.content.filter((c) => c.type === "image");
@@ -393,6 +395,7 @@ export class ToolExecutionComponent extends Container {
 					const imageData = converted?.data ?? img.data;
 					const imageMimeType = converted?.mimeType ?? img.mimeType;
 					if (caps.images === "kitty" && imageMimeType !== "image/png") continue;
+					if (caps.images === "sixel" && imageMimeType !== "image/png") continue;
 
 					const spacer = new Spacer(1);
 					this.addChild(spacer);

@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the built-in `/overview` overlay for inspecting the current runtime, session, model, context, and capabilities.
+
+### Changed
+
+- Changed user messages to use dashed borders and aligned `edit` tool output with the standard tool execution cards.
+
 ### Fixed
 
 - Fixed the write tool reporting UTF-16 code-unit counts as byte counts by removing the misleading count ([#8979](https://github.com/earendil-works/pi/issues/8979)).

@@ -1,5 +1,5 @@
 import type { AgentTool } from "@earendil-works/pi-agent-core";
-import { Box, Container, Spacer, Text } from "@earendil-works/pi-tui";
+import { BorderedBox, Container, Spacer, Text } from "@earendil-works/pi-tui";
 import { constants } from "fs";
 import { access as fsAccess, readFile as fsReadFile, writeFile as fsWriteFile } from "fs/promises";
 import { type Static, Type } from "typebox";
@@ -166,7 +166,7 @@ type EditToolResultLike = {
 	details?: EditToolDetails;
 };
 
-type EditCallRenderComponent = Box & {
+type EditCallRenderComponent = BorderedBox & {
 	preview?: EditPreview;
 	previewArgsKey?: string;
 	previewPending?: boolean;
@@ -174,7 +174,7 @@ type EditCallRenderComponent = Box & {
 };
 
 function createEditCallRenderComponent(): EditCallRenderComponent {
-	return Object.assign(new Box(1, 1, (text: string) => text), {
+	return Object.assign(new BorderedBox(1, 1, (text: string) => text), {
 		preview: undefined as EditPreview | undefined,
 		previewArgsKey: undefined as string | undefined,
 		previewPending: false,
@@ -183,7 +183,7 @@ function createEditCallRenderComponent(): EditCallRenderComponent {
 }
 
 function getEditCallRenderComponent(state: EditRenderState, lastComponent: unknown): EditCallRenderComponent {
-	if (lastComponent instanceof Box) {
+	if (lastComponent instanceof BorderedBox) {
 		const component = lastComponent as EditCallRenderComponent;
 		state.callComponent = component;
 		return component;
@@ -255,21 +255,18 @@ function formatEditResult(
 	return undefined;
 }
 
-function getEditHeaderBg(
+function getEditBorder(
 	preview: EditPreview | undefined,
 	settledError: boolean | undefined,
 	theme: Theme,
 ): (text: string) => string {
+	if ((preview && "error" in preview) || settledError) {
+		return (text: string) => theme.fg("toolErrorBorder", text);
+	}
 	if (preview) {
-		if ("error" in preview) {
-			return (text: string) => theme.bg("toolErrorBg", text);
-		}
-		return (text: string) => theme.bg("toolSuccessBg", text);
+		return (text: string) => theme.fg("toolSuccessBorder", text);
 	}
-	if (settledError) {
-		return (text: string) => theme.bg("toolErrorBg", text);
-	}
-	return (text: string) => theme.bg("toolPendingBg", text);
+	return (text: string) => theme.fg("toolPendingBorder", text);
 }
 
 function buildEditCallComponent(
@@ -278,7 +275,7 @@ function buildEditCallComponent(
 	theme: Theme,
 	cwd: string,
 ): EditCallRenderComponent {
-	component.setBgFn(getEditHeaderBg(component.preview, component.settledError, theme));
+	component.setBorderFn(getEditBorder(component.preview, component.settledError, theme));
 	component.clear();
 	component.addChild(new Text(formatEditCall(args, theme, cwd), 0, 0));
 

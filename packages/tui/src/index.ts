@@ -9,7 +9,11 @@ export {
 	CombinedAutocompleteProvider,
 	type SlashCommand,
 } from "./autocomplete.ts";
-export { BorderedBox } from "./components/bordered-box.ts";
+export {
+	BorderedBox,
+	type BorderedBoxStyle,
+	DEFAULT_BORDERED_BOX_STYLE,
+} from "./components/bordered-box.ts";
 // Components
 export { Box } from "./components/box.ts";
 export { CancellableLoader } from "./components/cancellable-loader.ts";

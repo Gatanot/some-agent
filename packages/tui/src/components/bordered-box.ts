@@ -9,17 +9,42 @@ import { visibleWidth } from "../utils.ts";
  * in between. The border color function receives the whole line, so it must
  * only set foreground styling (child content keeps its own colors).
  */
+export interface BorderedBoxStyle {
+	horizontal: string;
+	vertical: string;
+	topLeft: string;
+	topRight: string;
+	bottomLeft: string;
+	bottomRight: string;
+}
+
+export const DEFAULT_BORDERED_BOX_STYLE: BorderedBoxStyle = {
+	horizontal: "─",
+	vertical: "│",
+	topLeft: "╭",
+	topRight: "╮",
+	bottomLeft: "╰",
+	bottomRight: "╯",
+};
+
 export class BorderedBox implements Component {
 	children: Component[] = [];
 	private paddingX: number;
 	private paddingY: number;
 	private borderFn?: (text: string) => string;
 	private mouseLayout?: { width: number; children: Array<{ component: Component; height: number }> };
+	private style: BorderedBoxStyle;
 
-	constructor(paddingX = 1, paddingY = 1, borderFn?: (text: string) => string) {
+	constructor(
+		paddingX = 1,
+		paddingY = 1,
+		borderFn?: (text: string) => string,
+		style: BorderedBoxStyle = DEFAULT_BORDERED_BOX_STYLE,
+	) {
 		this.paddingX = paddingX;
 		this.paddingY = paddingY;
 		this.borderFn = borderFn;
+		this.style = style;
 	}
 
 	addChild(component: Component): void {
@@ -86,7 +111,7 @@ export class BorderedBox implements Component {
 		const contentWidth = Math.max(1, innerWidth - this.paddingX * 2);
 		const leftPad = " ".repeat(this.paddingX);
 		const style = (line: string): string => (this.borderFn ? this.borderFn(line) : line);
-		const edge = (inner: string): string => `│${inner}│`;
+		const edge = (inner: string): string => `${this.style.vertical}${inner}${this.style.vertical}`;
 
 		const childLines: string[] = [];
 		const mouseChildren: Array<{ component: Component; height: number }> = [];
@@ -100,8 +125,8 @@ export class BorderedBox implements Component {
 		this.mouseLayout = { width: contentWidth, children: mouseChildren };
 
 		const lines: string[] = [];
-		const horizontal = "─".repeat(Math.max(0, innerWidth));
-		lines.push(style(`╭${horizontal}╮`));
+		const horizontal = this.style.horizontal.repeat(Math.max(0, innerWidth));
+		lines.push(style(`${this.style.topLeft}${horizontal}${this.style.topRight}`));
 		const paddingRow = edge(" ".repeat(innerWidth));
 		for (let i = 0; i < this.paddingY; i++) {
 			lines.push(style(paddingRow));
@@ -113,7 +138,7 @@ export class BorderedBox implements Component {
 		for (let i = 0; i < this.paddingY; i++) {
 			lines.push(style(paddingRow));
 		}
-		lines.push(style(`╰${horizontal}╯`));
+		lines.push(style(`${this.style.bottomLeft}${horizontal}${this.style.bottomRight}`));
 		return lines;
 	}
 }

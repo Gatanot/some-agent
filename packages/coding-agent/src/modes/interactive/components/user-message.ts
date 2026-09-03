@@ -1,4 +1,11 @@
-import { BorderedBox, Container, Markdown, type MarkdownTheme } from "@earendil-works/pi-tui";
+import {
+	BorderedBox,
+	type BorderedBoxStyle,
+	Container,
+	DEFAULT_BORDERED_BOX_STYLE,
+	Markdown,
+	type MarkdownTheme,
+} from "@earendil-works/pi-tui";
 import type { MarkdownTransformer } from "../../../core/extensions/types.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 import { createMarkdownTransform } from "./markdown-transform.ts";
@@ -37,9 +44,13 @@ export class UserMessageComponent extends Container {
 
 	private rebuild(): void {
 		this.clear();
-		// Bordered card without background fill, matching the tool execution boxes.
-		// paddingY=0 keeps the previous card height (border rows replace padding).
-		const contentBox = new BorderedBox(this.outputPad, 0, (text: string) => theme.fg("border", text));
+		// User messages use a dashed outline to distinguish input from tool execution.
+		const dashedStyle: BorderedBoxStyle = {
+			...DEFAULT_BORDERED_BOX_STYLE,
+			horizontal: "┄",
+			vertical: "┆",
+		};
+		const contentBox = new BorderedBox(this.outputPad, 0, (text: string) => theme.fg("border", text), dashedStyle);
 		contentBox.addChild(
 			new Markdown(
 				this.text,

@@ -42,7 +42,7 @@ import { spawnProcess, spawnProcessSync } from "../utils/child-process.ts";
 import { type GitSource, parseGitUrl } from "../utils/git.ts";
 import { canonicalizePath, isLocalPath, markPathIgnoredByCloudSync, resolvePath } from "../utils/paths.ts";
 import { stripBom } from "../utils/text.ts";
-import { getBundledExtensionsDir } from "./extensions/bundled-dir.ts";
+import { getBundledExtensionsDir, getBundledResourcesDir } from "./extensions/bundled-dir.ts";
 import { isStdoutTakenOver } from "./output-guard.ts";
 import { type PiManifest, readPiManifest } from "./pi-manifest.ts";
 import type { PackageSource, SettingsManager } from "./settings-manager.ts";
@@ -2472,6 +2472,7 @@ export class DefaultPackageManager implements PackageManager {
 		// (packages/coding-agent/extensions in source, <root>/extensions in npm installs).
 		// Loaded before user extensions so built-in commands keep priority.
 		const bundledExtensionsDir = getBundledExtensionsDir();
+		const bundledResourcesDir = getBundledResourcesDir();
 		if (bundledExtensionsDir) {
 			const bundledMetadata: PathMetadata = {
 				source: "auto",
@@ -2485,6 +2486,21 @@ export class DefaultPackageManager implements PackageManager {
 				bundledMetadata,
 				userOverrides.extensions,
 				dirname(bundledExtensionsDir),
+			);
+		}
+		if (bundledResourcesDir) {
+			const bundledMetadata: PathMetadata = {
+				source: "auto",
+				scope: "user",
+				origin: "top-level",
+				baseDir: bundledResourcesDir,
+			};
+			addResources(
+				"prompts",
+				collectAutoPromptEntries(join(bundledResourcesDir, "prompts")),
+				bundledMetadata,
+				userOverrides.prompts,
+				bundledResourcesDir,
 			);
 		}
 

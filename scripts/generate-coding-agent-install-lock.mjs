@@ -11,11 +11,11 @@ const outputDir = join(codingAgentDir, "install-lock");
 const rootLockfilePath = join(repoRoot, "package-lock.json");
 const outputPackageJsonPath = join(outputDir, "package.json");
 const outputLockfilePath = join(outputDir, "package-lock.json");
-const internalPackagePrefix = "@earendil-works/pi-";
-const orreryPackageName = "@gatanot/orrery";
+const internalPackagePrefixes = ["@earendil-works/pi-", "@gatanot/"];
+const internalPackageNames = new Set(["@gatanot/orrery"]);
 
 function isInternalPackageName(name) {
-	return name === orreryPackageName || name.startsWith(internalPackagePrefix);
+	return internalPackageNames.has(name) || internalPackagePrefixes.some((prefix) => name.startsWith(prefix));
 }
 const installPackageName = "@earendil-works/pi-coding-agent-install";
 const allowedInstallScriptPackages = new Map([]);

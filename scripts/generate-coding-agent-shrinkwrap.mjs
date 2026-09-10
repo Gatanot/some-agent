@@ -9,7 +9,7 @@ const repoRoot = resolve(scriptDir, "..");
 const codingAgentDir = join(repoRoot, "packages/coding-agent");
 const rootLockfilePath = join(repoRoot, "package-lock.json");
 const shrinkwrapPath = join(codingAgentDir, "npm-shrinkwrap.json");
-const internalPackagePrefix = "@earendil-works/pi-";
+const internalPackagePrefixes = ["@gatanot/"];
 const allowedInstallScriptPackages = new Map([]);
 
 const args = new Set(process.argv.slice(2));
@@ -133,7 +133,7 @@ function getInternalWorkspaces(lockPackages) {
 		if (!lockPath.startsWith("packages/") || lockPath.includes("/node_modules/") || !entry.name || !entry.version) {
 			continue;
 		}
-		if (!entry.name.startsWith(internalPackagePrefix)) {
+		if (!internalPackagePrefixes.some((prefix) => entry.name.startsWith(prefix))) {
 			continue;
 		}
 

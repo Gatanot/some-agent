@@ -6,7 +6,7 @@
  */
 
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { Text } from "@gatanot/orrery-tui";
 import { Type } from "typebox";
 
 interface StructuredOutputDetails {

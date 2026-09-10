@@ -5,7 +5,7 @@ import {
 	DEFAULT_BORDERED_BOX_STYLE,
 	Markdown,
 	type MarkdownTheme,
-} from "@earendil-works/pi-tui";
+} from "@gatanot/orrery-tui";
 import type { MarkdownTransformer } from "../../../core/extensions/types.ts";
 import { getMarkdownTheme, theme } from "../theme/theme.ts";
 import { createMarkdownTransform } from "./markdown-transform.ts";

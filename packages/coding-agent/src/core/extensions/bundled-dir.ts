@@ -48,3 +48,9 @@ export function getBundledExtensionsDir(): string | null {
 	if (bundledExtensionsDirOverride !== undefined) return bundledExtensionsDirOverride;
 	return findBundledExtensionsDir(path.dirname(fileURLToPath(import.meta.url)));
 }
+
+/** Return the root directory containing bundled extensions and prompts. */
+export function getBundledResourcesDir(): string | null {
+	const extensionsDir = getBundledExtensionsDir();
+	return extensionsDir ? path.dirname(extensionsDir) : null;
+}

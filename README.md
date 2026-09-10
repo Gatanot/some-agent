@@ -5,6 +5,18 @@
 </p>
 
 > **This repository is a personal fork.** The agent is branded as **Orrery** and published as [`@gatanot/orrery`](https://www.npmjs.com/package/@gatanot/orrery). Upstream project: [earendil-works/pi-mono](https://github.com/earendil-works/pi-mono). Docs below describe the upstream project; behavior is identical except branding and versioning.
+
+## About Orrery
+
+Orrery is a personal agent forked from Pi. It reuses Pi's packages and upstream implementation whenever possible, while adding a small set of personal UI and agent customizations.
+
+### Package reuse and modification policy
+
+- Prefer the upstream Pi packages, including `@earendil-works/pi-agent-core`, `@earendil-works/pi-ai`, `@earendil-works/pi-client`, and `@earendil-works/pi-protocol`.
+- If a Pi package must be modified, explicitly explain the modification to the user before or during the change.
+- A modified package must be published under an Orrery package name instead of silently using the upstream package. For example, the modified TUI package is published as [`@gatanot/orrery-tui`](https://www.npmjs.com/package/@gatanot/orrery-tui).
+- Whenever a package is renamed or replaced, update all source imports, TypeScript path mappings, runtime dependencies, lockfiles, shrinkwrap files, install locks, build scripts, and release configuration that refer to the old package.
+- Do not republish unchanged Pi packages under Orrery names. Keep their upstream package names and versions.
 <p align="center">
   <a href="https://discord.com/invite/3cU7Bz4UPx"><img alt="Discord" src="https://img.shields.io/badge/discord-community-5865F2?style=flat-square&logo=discord&logoColor=white" /></a>
   <a href="https://www.npmjs.com/package/@earendil-works/pi-coding-agent"><img alt="npm" src="https://img.shields.io/npm/v/@earendil-works/pi-coding-agent?style=flat-square" /></a>

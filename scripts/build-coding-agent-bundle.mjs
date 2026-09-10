@@ -166,9 +166,22 @@ const mainResult = await build({
 	splitting: true,
 });
 
-const bedrockLoaderOutput = findContainingOutput(mainResult.metafile, "packages/ai/dist/api/bedrock-converse-stream.lazy.js");
-const oauthLoaderOutput = findContainingOutput(mainResult.metafile, "packages/ai/dist/auth/oauth/load.js");
-const imageResizeOutput = findContainingOutput(mainResult.metafile, "packages/coding-agent/dist/utils/image-resize.js");
+const findOutputOrFallback = (inputSuffix, fallback) => {
+	try {
+		return findContainingOutput(mainResult.metafile, inputSuffix);
+	} catch {
+		return fallback;
+	}
+};
+const bedrockLoaderOutput = findOutputOrFallback(
+	"packages/ai/dist/api/bedrock-converse-stream.lazy.js",
+	join(bundleDir, "chunks", "bedrock-converse-stream.lazy.js"),
+);
+const oauthLoaderOutput = findOutputOrFallback("packages/ai/dist/auth/oauth/load.js", join(bundleDir, "chunks", "load.js"));
+const imageResizeOutput = findOutputOrFallback(
+	"packages/coding-agent/dist/utils/image-resize.js",
+	join(bundleDir, "chunks", "image-resize.js"),
+);
 if (dirname(bedrockLoaderOutput) !== dirname(oauthLoaderOutput)) {
 	throw new Error("Bedrock and OAuth lazy loaders were emitted into different directories");
 }

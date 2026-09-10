@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-09-07
+
 ### Added
 
 - Added the built-in `/overview` overlay for inspecting the current runtime, session, model, context, and capabilities.

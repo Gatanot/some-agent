@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-09-07
+
 ### Fixed
 
 - Fixed proxied assistant responses dropping persisted provider-native thinking levels.

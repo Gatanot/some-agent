@@ -186,6 +186,52 @@ test("renders image content parts as image blocks", () => {
 	assert.deepEqual(image, { type: "image", mimeType: "image/png", data: "aGVsbG8=" });
 });
 
+test("labels a running turn as Working and a failed turn as Error", () => {
+	const running = snapshotToAppState(snapshot({ phase: "streaming", prompting: true }), "connected");
+	assert.equal(running.phaseLabel, "Working");
+
+	const failed = snapshotToAppState(
+		snapshot({
+			phase: "error",
+			error: "provider failed",
+			messages: [
+				{ role: "user", content: "fail", timestamp: 1 },
+				{ role: "assistant", content: [], stopReason: "error", errorMessage: "provider failed", timestamp: 2 },
+			],
+		}),
+		"connected",
+	);
+	assert.equal(failed.phaseLabel, "Error");
+});
+
+test("shows a turn error at the end of the conversation", () => {
+	const withMessageError = snapshotToAppState(
+		snapshot({
+			phase: "error",
+			error: "provider failed",
+			messages: [
+				{ role: "user", content: "fail", timestamp: 1 },
+				{ role: "assistant", content: [], stopReason: "error", errorMessage: "provider failed", timestamp: 2 },
+			],
+		}),
+		"connected",
+	);
+	assert.equal(withMessageError.messages.at(-1)?.error, "provider failed");
+	assert.equal(withMessageError.notice, undefined);
+
+	// A session-level error has no assistant message to attach to, so it is appended.
+	const withoutMessageError = snapshotToAppState(
+		snapshot({
+			phase: "error",
+			error: "session failed to start",
+			messages: [{ role: "user", content: "hi", timestamp: 1 }],
+		}),
+		"connected",
+	);
+	assert.equal(withoutMessageError.messages.at(-1)?.error, "session failed to start");
+	assert.equal(withoutMessageError.notice, undefined);
+});
+
 test("renders edit results as diff lines", () => {
 	const state = snapshotToAppState(
 		snapshot({

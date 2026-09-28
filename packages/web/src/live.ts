@@ -197,8 +197,9 @@ function assistantMessage(
 	results: Map<string, WireRecord>,
 ): Message[] {
 	const blocks = messageBlocks(message);
+	const errorMessage = stringValue(message.errorMessage);
 	const output: Message[] = [];
-	if (blocks.length > 0) {
+	if (blocks.length > 0 || errorMessage) {
 		output.push({
 			id: `assistant-${index}-${String(message.timestamp ?? "")}`,
 			role: "assistant",
@@ -206,7 +207,7 @@ function assistantMessage(
 			avatar: "O",
 			time: timestamp(message.timestamp),
 			blocks,
-			error: stringValue(message.errorMessage),
+			error: errorMessage,
 		});
 	}
 	const calls = toolCalls(message);
@@ -303,6 +304,19 @@ function mapMessages(snapshot: WebSnapshot): Message[] {
 			output.push(message);
 		}
 	}
+	// A turn-level error must stay visible at the end of the conversation even when the failed
+	// assistant message carried no content blocks of its own.
+	if (snapshot.error && !output.some((message) => message.error === snapshot.error)) {
+		output.push({
+			id: "turn-error",
+			role: "assistant",
+			label: "Orrery",
+			avatar: "!",
+			time: "现在",
+			blocks: [],
+			error: snapshot.error,
+		});
+	}
 	return output;
 }
 
@@ -365,6 +379,8 @@ export function snapshotToAppState(
 		snapshot.models.some((model) => model.provider === snapshot.model?.provider && model.id === snapshot.model?.id);
 	const running = snapshot.phase === "streaming" || snapshot.phase === "stopping";
 	const hasError = snapshot.phase === "error" || Boolean(snapshot.error);
+	const messages = mapMessages(snapshot);
+	const errorShownInline = messages.some((message) => message.error === snapshot.error);
 	return {
 		title: sessionTitle(snapshot),
 		subtitle: snapshot.cwd,
@@ -372,11 +388,11 @@ export function snapshotToAppState(
 		phase: running ? "running" : snapshot.phase === "error" ? "error" : "idle",
 		phaseLabel:
 			snapshot.phase === "streaming"
-				? "运行中"
+				? "Working"
 				: snapshot.phase === "stopping"
 					? "停止中"
 					: hasError
-						? "需要处理"
+						? "Error"
 						: "空闲",
 		phaseTone: running ? "running" : hasError ? "error" : "idle",
 		connection,
@@ -387,11 +403,11 @@ export function snapshotToAppState(
 		thinkingLevel: snapshot.thinkingLevel ?? "off",
 		thinkingLevels: snapshot.thinkingLevels,
 		usage: usageText(snapshot),
-		messages: mapMessages(snapshot),
+		messages,
 		draft: "",
 		noModel: !hasUsableModel,
 		...(snapshot.queuedMessages ? { queuedMessages: snapshot.queuedMessages } : {}),
-		...(snapshot.error
+		...(snapshot.error && !errorShownInline
 			? {
 					notice: {
 						kind: "error" as const,

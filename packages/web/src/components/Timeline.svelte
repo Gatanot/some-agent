@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { ArrowDown, RotateCw } from "@lucide/svelte";
+	import { RotateCw } from "@lucide/svelte";
 	import { afterUpdate } from "svelte";
 	import CopyButton from "./CopyButton.svelte";
+	import OutputBlock from "./OutputBlock.svelte";
 	import ToolCard from "./ToolCard.svelte";
 	import type { AppState } from "../types.ts";
 
@@ -62,9 +63,6 @@
 	{/if}
 	<div class="timeline" bind:this={timelineElement} tabindex="-1" role="region" aria-label="消息时间线" on:scroll={handleScroll}>
 		<div class="timeline-inner">
-			<div class="timeline-toolbar">
-				<button class="back-latest" type="button" hidden={wasAtEnd} on:click={() => (timelineElement.scrollTop = timelineElement.scrollHeight)}><ArrowDown size={14} />回到最新</button>
-			</div>
 			{#if state.notice}
 				<section class={`notice ${state.notice.kind}`}>
 					<div class="notice-title">{state.notice.title}</div>
@@ -101,7 +99,7 @@
 									{:else if block.type === "code"}
 										<div class="code-block"><div class="code-head"><span>{block.language}</span><CopyButton value={block.text} {onCopy} label="复制代码" /></div><pre>{block.text}</pre></div>
 									{:else if block.type === "largeOutput"}
-										<div class="code-block"><div class="code-head"><span>输出</span><CopyButton value={block.text} {onCopy} label="复制输出" /></div><pre>{block.text}</pre></div>
+										<OutputBlock text={block.text} {onCopy} />
 									{/if}
 								{/each}
 								{#if message.error}<div class="error-block">{message.error}</div>{/if}

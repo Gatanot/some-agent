@@ -63,6 +63,26 @@ export interface WebContextUsage {
 	percent: number | null;
 }
 
+export interface WebUsageModel {
+	key: string;
+	tokens: number;
+	cost: number;
+}
+
+export interface WebUsageDay {
+	date: string;
+	tokens: number;
+	cost: number;
+}
+
+export interface WebUsage {
+	days: number;
+	totalTokens: number;
+	totalCost: number;
+	models: WebUsageModel[];
+	daily: WebUsageDay[];
+}
+
 export interface QueuedMessages {
 	steering: string[];
 	followUp: string[];

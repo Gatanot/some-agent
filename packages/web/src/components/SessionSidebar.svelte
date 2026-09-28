@@ -57,9 +57,6 @@
 
 <aside class="sidebar" aria-label="会话导航">
 	<div class="sidebar-head">
-		<div class="sidebar-brand-row">
-			<div class="brand"><span class="brand-mark" aria-hidden="true"><span></span></span><span class="brand-name">Orrery</span></div>
-		</div>
 		<div class="search-row">
 			<div class="search-wrap">
 				<Search size={15} aria-hidden="true" />

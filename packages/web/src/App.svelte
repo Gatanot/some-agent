@@ -74,6 +74,7 @@
 	let draftSessionId: string | undefined;
 	let draftBySession = new Map<string, string>();
 	let sessionNameEditing = false;
+	let usageRefreshToken = 0;
 	let state: AppState;
 
 	function loadingState(): AppState {
@@ -180,6 +181,7 @@
 			}
 			if (snapshotFrame === undefined) snapshotFrame = requestAnimationFrame(flushSnapshotFrame);
 			if (!envelope.eventType || envelope.eventType === "session_info_changed" || envelope.eventType === "agent_end") {
+				if (envelope.eventType === "agent_end") usageRefreshToken += 1;
 				void loadSessions();
 			}
 		} catch {
@@ -374,6 +376,6 @@
 			/>
 		</section>
 		{#if inspectorOpen}<button class="inspector-backdrop" type="button" aria-label="关闭检查栏" on:click={() => (inspectorOpen = false)}></button>{/if}
-		<Inspector state={state} snapshot={serverSnapshot} activeTab={inspectorTab} open={inspectorOpen} {connectionStatus} {theme} {themeActionLabel} onToggleTheme={toggleTheme} onClose={() => (inspectorOpen = false)} onTabSelect={selectInspectorTab} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} />
+		<Inspector state={state} snapshot={serverSnapshot} activeTab={inspectorTab} open={inspectorOpen} {connectionStatus} {theme} {themeActionLabel} onToggleTheme={toggleTheme} onClose={() => (inspectorOpen = false)} onTabSelect={selectInspectorTab} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} usageRefresh={usageRefreshToken} />
 	</main>
 </div>

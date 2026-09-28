@@ -37,8 +37,10 @@
 	"dependencies": {
 		"@earendil-works/pi-ai": "^0.1.9",
 		"@earendil-works/pi-telemetry": "^0.1.9",
+		"@mozilla/readability": "0.6.0",
 		"diff": "8.0.4",
 		"ignore": "7.0.5",
+		"linkedom": "0.18.13",
 		"typebox": "1.3.7",
 		"yaml": "2.9.0"
 	},

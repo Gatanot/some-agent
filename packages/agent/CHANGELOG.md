@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added compact `web_search` and cleaned `web_fetch` tool factories with provider injection and argument-only call history.
+
 ## [0.1.9] - 2026-09-07
 
 ### Fixed

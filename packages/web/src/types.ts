@@ -8,6 +8,12 @@ export interface DiffLine {
 	text: string;
 }
 
+/** Base64 image content as delivered by the agent (for example a `read` tool result). */
+export interface ToolImage {
+	mimeType: string;
+	data: string;
+}
+
 export interface Tool {
 	id: string;
 	name: string;
@@ -17,6 +23,7 @@ export interface Tool {
 	input: string;
 	output: string | DiffLine[];
 	outputType?: "diff";
+	images?: ToolImage[];
 	startedAt?: number;
 	finishedAt?: number;
 	timeoutSeconds?: number;
@@ -25,7 +32,8 @@ export interface Tool {
 export type Block =
 	| { type: "text" | "thinking"; text: string; html: string }
 	| { type: "largeOutput"; text: string }
-	| { type: "code"; language: string; text: string };
+	| { type: "code"; language: string; text: string }
+	| { type: "image"; mimeType: string; data: string };
 
 export interface Message {
 	id: string;

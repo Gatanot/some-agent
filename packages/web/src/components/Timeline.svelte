@@ -100,6 +100,8 @@
 										<div class="code-block"><div class="code-head"><span>{block.language}</span><CopyButton value={block.text} {onCopy} label="复制代码" /></div><pre>{block.text}</pre></div>
 									{:else if block.type === "largeOutput"}
 										<OutputBlock text={block.text} {onCopy} />
+									{:else if block.type === "image"}
+										<figure class="message-image"><img src={`data:${block.mimeType};base64,${block.data}`} alt="对话图片" loading="lazy" /></figure>
 									{/if}
 								{/each}
 								{#if message.error}<div class="error-block">{message.error}</div>{/if}

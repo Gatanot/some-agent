@@ -227,6 +227,13 @@ pre { margin: 0; padding: 11px; overflow-x: auto; color: var(--code-text); font-
 .tool-status.error { color: var(--danger); }
 .tool-detail { color: var(--text-muted); font-size: 11px; }
 .tool-detail pre { max-height: 320px; padding: 3px 0 0; overflow: auto; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-image-count { display: inline-flex; align-items: center; gap: 4px; color: var(--text-subtle); font-size: 10px; }
+.tool-images { display: grid; gap: 8px; margin-top: 8px; }
+.tool-image { display: grid; gap: 4px; margin: 0; }
+.tool-image img { max-width: 100%; max-height: 320px; border: 1px solid var(--line); border-radius: 5px; background: var(--code-bg); object-fit: contain; }
+.tool-image figcaption { color: var(--text-subtle); font-size: 10px; }
+.message-image { margin: 10px 0; }
+.message-image img { max-width: 100%; max-height: 420px; border: 1px solid var(--line); border-radius: 5px; background: var(--code-bg); object-fit: contain; }
 .diff-line { display: block; padding: 0 4px; }
 .diff-line.add { background: var(--diff-add-bg); color: var(--diff-add-text); }
 .diff-line.remove { background: var(--diff-remove-bg); color: var(--diff-remove-text); }

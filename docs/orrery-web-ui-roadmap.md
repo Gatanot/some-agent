@@ -26,7 +26,7 @@
 | --- | --- | --- |
 | 本地启动 | Node HTTP 服务，仅绑定 loopback；开发模式由 Vite middleware 提供页面 | 完善启动失败、退出和生产静态资源说明 |
 | Agent 接入 | 服务端创建并复用当前 SDK session；页面接收版本化 SSE 快照和 agent 事件 | faux provider HTTP/SSE 覆盖流式思考/文本、工具 partial/error、取消、重连和 session transition；Chromium 中验证 prompt 和快照渲染 |
-| 会话 | 侧栏通过 `/api/sessions` 显示真实历史 session，搜索、选择恢复和新建调用真实服务端；运行中禁止切换；命名走 `/api/session/name`；草稿按 session id 隔离 | 补分支和更细的恢复错误反馈 |
+| 会话 | 侧栏通过 `/api/sessions` 显示真实历史 session，`/api/sessions/search` 按标题与 `allMessagesText` 全量检索并返回片段；选择恢复、新建调用真实服务端；运行中禁止切换；命名走 `/api/session/name`；草稿按 session id 隔离 | 补分支和更细的恢复错误反馈 |
 | 提交与取消 | `/api/prompt`、`/api/abort` 已接入真实 session；流式进行中提交按 steer 排队，草稿保留 | 补浏览器流程和跨标签页验收 |
 | 更新传输 | 首帧/重连发送完整快照；流式事件只发增量字段，队列积压时合并为单帧快照 | 已完成；后续按需评估 WebSocket |
 | 消息展示 | Svelte 时间线使用安全 Markdown、代码语法高亮、diff 呈现、代码复制和 thinking 折叠；工具卡片展开状态持久化 | 已完成；后续按需补更多专用工具呈现 |
@@ -98,7 +98,7 @@
 
 - [x] 文件变更摘要与 diff 详情；区分工具结果中的 diff（时间线工具卡片）和整个工作区的 Git diff（检查栏 Changes）。
 - [x] 长输出的展示层折叠/截断、展开与复制（快照与 session 仍保留全文）；虚拟滚动按实测结果决定是否引入。
-- [ ] 会话内搜索与消息定位。
+- [x] 侧栏搜索：匹配会话名称、首条消息与整段 user/assistant 文本，命中时显示片段和匹配次数；服务端通过 `/api/sessions/search` 复用会话列表缓存的 `SessionInfo.allMessagesText`，客户端防抖查询。
 - [x] 检查栏项目用量视图：最近 14 天按天和按模型的 token 统计，无消耗的模型不显示；服务端通过 `/api/usage` 汇总本项目窗口内的 session 用量，并在每轮任务结束后自动刷新。
 - [ ] 图片/文件输入，显示实际发送的内容和限制。
 - [x] 运行中提交排队为 follow-up：输入栏有内容时只显示发送图标，提交后在当前任务结束后执行；输入栏为空时只显示停止图标。
@@ -143,8 +143,8 @@
 
 | 记录项 | 内容 |
 | --- | --- |
-| 当前阶段 | P0 已完成；P1 主要交付完成；P2 进行中（工作区 Git diff 详情、长输出折叠/截断） |
-| 下一项交付 | P2 继续：会话内搜索与消息定位、图片/文件输入 |
+| 当前阶段 | P0 已完成；P1 主要交付完成；P2 进行中（工作区 Git diff 详情、长输出折叠/截断、会话内容搜索） |
+| 下一项交付 | P2 继续：图片/文件输入（先做工具结果中已读取图片的展示，不改动 pi） |
 | 待决定 | 检查栏的 diff 来源和分支操作的最终交互 |
 | 已确认约束 | 永久单用户；复用现有 agent；Svelte + Vite 作为 Web UI 技术栈 |
 

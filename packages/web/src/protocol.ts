@@ -27,6 +27,17 @@ export interface WebSessionsResponse {
 	currentSessionId?: string;
 }
 
+/** A session whose title or transcript matched a `/api/sessions/search` query. */
+export interface WebSessionMatch extends WebSessionSummary {
+	snippet: string;
+	matchCount: number;
+}
+
+export interface WebSessionSearchResponse {
+	query: string;
+	matches: WebSessionMatch[];
+}
+
 export interface WebModelOption {
 	provider: string;
 	id: string;

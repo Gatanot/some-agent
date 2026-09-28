@@ -1,14 +1,18 @@
 <script lang="ts">
 	import { Plus, Search } from "@lucide/svelte";
-	import type { WebSessionSummary, WebSnapshot } from "../protocol.ts";
+	import type { WebSessionMatch, WebSessionSummary, WebSnapshot } from "../protocol.ts";
 
 	export let snapshot: WebSnapshot | undefined;
 	export let sessions: WebSessionSummary[] = [];
+	export let matches: WebSessionMatch[] = [];
+	export let searching = false;
 	export let onSessionSelect: (id: string) => void;
+	export let onSearch: (query: string) => void;
 	export let onNewSession: () => void;
 	export let newSessionDisabled = false;
 
 	let query = "";
+	$: onSearch(query);
 
 	function record(value: unknown): Record<string, unknown> | undefined {
 		return typeof value === "object" && value !== null && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
@@ -49,10 +53,7 @@
 
 	$: currentTitle = snapshot ? sessionTitle() : "等待 session";
 	$: currentId = snapshot?.sessionId;
-	$: visibleSessions = sessions.filter((session) => {
-		const needle = query.trim().toLowerCase();
-		return !needle || `${summaryTitle(session)} ${session.cwd} ${session.firstMessage}`.toLowerCase().includes(needle);
-	});
+	$: needle = query.trim();
 </script>
 
 <aside class="sidebar" aria-label="会话导航">
@@ -61,7 +62,7 @@
 			<div class="search-wrap">
 				<Search size={15} aria-hidden="true" />
 				<label class="visually-hidden" for="session-search">搜索会话</label>
-				<input id="session-search" class="session-search" type="search" bind:value={query} placeholder="搜索会话" />
+				<input id="session-search" class="session-search" type="search" bind:value={query} placeholder="搜索标题与会话内容" />
 			</div>
 			<button class="icon-button new-session-button" type="button" aria-label="新建会话" title="新建会话" disabled={newSessionDisabled} on:click={onNewSession}>
 				<Plus size={16} strokeWidth={1.9} />
@@ -72,11 +73,29 @@
 	<nav class="session-list" aria-label="历史 sessions">
 		{#if !snapshot}
 			<div class="sidebar-placeholder">正在连接当前会话…</div>
-		{:else if visibleSessions.length === 0 && !currentId}
-			<div class="sidebar-placeholder">{query ? "没有匹配的会话" : "暂无历史会话"}</div>
+		{:else if needle}
+			{#if searching && matches.length === 0}
+				<div class="sidebar-placeholder">正在搜索…</div>
+			{:else if matches.length === 0}
+				<div class="sidebar-placeholder">没有匹配的会话</div>
+			{:else}
+				<div class="session-period">搜索结果 · {matches.length}</div>
+				{#each matches as session (session.id)}
+					<button class:current={session.id === currentId} class="session-item" type="button" aria-current={session.id === currentId} on:click={() => onSessionSelect(session.id)}>
+						<span class={`session-dot ${session.id === currentId && snapshot.prompting ? "active" : ""}`}></span>
+						<span class="session-copy">
+							<span class="session-title">{session.id === currentId ? currentTitle : summaryTitle(session)}</span>
+							{#if session.snippet}<span class="session-snippet" title={session.snippet}>{session.snippet}</span>{/if}
+							<span class="session-meta"><span>{session.matchCount} 处匹配</span><span>{relativeTime(session.modified)}</span></span>
+						</span>
+					</button>
+				{/each}
+			{/if}
+		{:else if sessions.length === 0 && !currentId}
+			<div class="sidebar-placeholder">暂无历史会话</div>
 		{:else}
 			<div class="session-period">最近会话</div>
-			{#each visibleSessions as session (session.id)}
+			{#each sessions as session (session.id)}
 				<button class:current={session.id === currentId} class="session-item" type="button" aria-current={session.id === currentId} on:click={() => onSessionSelect(session.id)}>
 					<span class={`session-dot ${session.id === currentId && snapshot.prompting ? "active" : ""}`}></span>
 					<span class="session-copy">
@@ -85,7 +104,7 @@
 					</span>
 				</button>
 			{/each}
-			{#if currentId && !visibleSessions.some((session) => session.id === currentId)}
+			{#if currentId && !sessions.some((session) => session.id === currentId)}
 				<div class="session-item current" aria-current="true">
 					<span class={`session-dot ${snapshot.prompting ? "active" : ""}`}></span>
 					<span class="session-copy"><span class="session-title">{currentTitle}</span><span class="session-meta"><span>{snapshot.messages.length} 条消息</span><span>当前</span></span></span>

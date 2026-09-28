@@ -10,6 +10,8 @@ import { readGitDiff, readGitStatus } from "./git.ts";
 import type {
 	WebEventEnvelope,
 	WebGitState,
+	WebSessionMatch,
+	WebSessionSearchResponse,
 	WebSessionSummary,
 	WebSessionsResponse,
 	WebSnapshot,
@@ -35,6 +37,9 @@ const SSE_HEARTBEAT_MS = 15_000;
 const MAX_QUEUED_SSE_FRAMES = 16;
 const DEFAULT_USAGE_DAYS = 14;
 const MAX_USAGE_DAYS = 90;
+const DEFAULT_SEARCH_LIMIT = 50;
+const MAX_SEARCH_LIMIT = 200;
+const SNIPPET_CONTEXT = 60;
 
 interface SseSubscriber {
 	response: ServerResponse;
@@ -147,6 +152,60 @@ async function listSessions(): Promise<WebSessionsResponse> {
 		sessions: sessions.map(sessionSummary),
 		...(session?.sessionId ? { currentSessionId: session.sessionId } : {}),
 	};
+}
+
+function parseSearchLimit(value: string | null): number {
+	if (!value) return DEFAULT_SEARCH_LIMIT;
+	const parsed = Number.parseInt(value, 10);
+	if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_SEARCH_LIMIT) return DEFAULT_SEARCH_LIMIT;
+	return parsed;
+}
+
+/** One-line excerpt around the first match so the sidebar can show where it hit. */
+function sessionSnippet(source: string, needle: string, matchIndex: number): string {
+	const start = Math.max(0, matchIndex - SNIPPET_CONTEXT);
+	const end = Math.min(source.length, matchIndex + needle.length + SNIPPET_CONTEXT);
+	const excerpt = source.slice(start, end).replace(/\s+/g, " ").trim();
+	return `${start > 0 ? "…" : ""}${excerpt}${end < source.length ? "…" : ""}`;
+}
+
+/**
+ * Searches the session catalog built by the latest list, matching titles and full
+ * user/assistant transcripts (`SessionInfo.allMessagesText`). Falls back to listing when the
+ * catalog is empty so the endpoint works before the client has loaded history.
+ */
+async function searchSessions(rawQuery: string, limit: number): Promise<WebSessionSearchResponse> {
+	const query = rawQuery.trim();
+	if (!query) return { query, matches: [] };
+	if (sessionCatalog.size === 0) await listSessions();
+
+	const needle = query.toLowerCase();
+	const matches: WebSessionMatch[] = [];
+	for (const info of sessionCatalog.values()) {
+		const transcript = info.allMessagesText;
+		const haystack = `${info.name ?? ""}\n${transcript}`.toLowerCase();
+		const at = haystack.indexOf(needle);
+		if (at < 0) continue;
+
+		let matchCount = 0;
+		for (
+			let cursor = haystack.indexOf(needle);
+			cursor >= 0;
+			cursor = haystack.indexOf(needle, cursor + needle.length)
+		) {
+			matchCount++;
+		}
+
+		const transcriptIndex = transcript.toLowerCase().indexOf(needle);
+		matches.push({
+			...sessionSummary(info),
+			snippet: transcriptIndex >= 0 ? sessionSnippet(transcript, needle, transcriptIndex) : "",
+			matchCount,
+		});
+	}
+
+	matches.sort((a, b) => (a.modified < b.modified ? 1 : a.modified > b.modified ? -1 : 0));
+	return { query, matches: matches.slice(0, limit) };
 }
 
 function parseUsageDays(value: string | null): number {
@@ -631,6 +690,19 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 	if (url.pathname === "/api/sessions" && request.method === "GET") {
 		try {
 			sendJson(response, 200, await listSessions());
+		} catch (error) {
+			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/sessions/search" && request.method === "GET") {
+		try {
+			sendJson(
+				response,
+				200,
+				await searchSessions(url.searchParams.get("q") ?? "", parseSearchLimit(url.searchParams.get("limit"))),
+			);
 		} catch (error) {
 			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
 		}

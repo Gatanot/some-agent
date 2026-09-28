@@ -137,7 +137,13 @@ async function waitForSse(
 	throw new Error("Timed out waiting for the expected SSE event");
 }
 
-function sessionInfo(session: AgentSession, path: string, cwd: string, firstMessage: string): SessionInfo {
+function sessionInfo(
+	session: AgentSession,
+	path: string,
+	cwd: string,
+	firstMessage: string,
+	transcript = firstMessage,
+): SessionInfo {
 	const now = new Date();
 	return {
 		path,
@@ -148,7 +154,7 @@ function sessionInfo(session: AgentSession, path: string, cwd: string, firstMess
 		modified: now,
 		messageCount: session.agent.state.messages.length,
 		firstMessage,
-		allMessagesText: firstMessage,
+		allMessagesText: transcript,
 	};
 }
 
@@ -265,7 +271,7 @@ async function createFixture(
 		: undefined;
 	let currentSession = primary;
 	const lister = async () => [
-		sessionInfo(primary, primaryPath, cwd, "primary session"),
+		sessionInfo(primary, primaryPath, cwd, "primary session", "primary session\nsecret transcript marker"),
 		sessionInfo(secondary, secondaryPath, cwd, "secondary session"),
 	];
 	const factory = async (selection: SessionSelection) => {
@@ -758,6 +764,28 @@ test("queues a prompt while the agent is streaming instead of rejecting it", asy
 		assert.match(JSON.stringify(afterSnapshot.messages), /queued reply/);
 	} finally {
 		await events.reader.cancel();
+		await fixture.close();
+	}
+});
+
+test("searches sessions by title and transcript content", async () => {
+	const fixture = await createFixture([fauxAssistantMessage("unused")]);
+	try {
+		const byTitle = await request(fixture.baseUrl, "/api/sessions/search?q=primary");
+		assert.equal(byTitle.response.status, 200);
+		const titleMatches = byTitle.body.matches as Array<{ id: string }>;
+		assert.ok(titleMatches.some((match) => match.id === fixture.sessions[0]?.sessionId));
+
+		const byContent = await request(fixture.baseUrl, "/api/sessions/search?q=secret%20transcript");
+		const contentMatches = byContent.body.matches as Array<{ id: string; snippet: string; matchCount: number }>;
+		assert.equal(contentMatches.length, 1);
+		assert.equal(contentMatches[0]?.id, fixture.sessions[0]?.sessionId);
+		assert.match(contentMatches[0]?.snippet ?? "", /secret transcript marker/);
+		assert.equal(contentMatches[0]?.matchCount, 1);
+
+		const empty = await request(fixture.baseUrl, "/api/sessions/search?q=");
+		assert.deepEqual(empty.body.matches, []);
+	} finally {
 		await fixture.close();
 	}
 });

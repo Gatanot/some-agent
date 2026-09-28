@@ -6,7 +6,7 @@
 	import SessionSidebar from "./components/SessionSidebar.svelte";
 	import Timeline from "./components/Timeline.svelte";
 	import { snapshotToAppState } from "./live.ts";
-	import type { WebEventEnvelope, WebGitDiff, WebSessionSummary, WebSessionsResponse, WebSnapshot } from "./protocol.ts";
+	import type { WebEventEnvelope, WebGitDiff, WebSessionMatch, WebSessionSearchResponse, WebSessionSummary, WebSessionsResponse, WebSnapshot } from "./protocol.ts";
 	import type { AppState } from "./types.ts";
 
 	const themeStorageKey = "orrery.theme";
@@ -67,7 +67,11 @@
 	let snapshotFrame: number | undefined;
 	let sessionSummaries: WebSessionSummary[] = [];
 	let sessionListRequest = 0;
-	let inspectorTab: "changes" | "terminal" | "context" = "changes";
+	let sessionMatches: WebSessionMatch[] = [];
+	let sessionSearching = false;
+	let sessionSearchRequest = 0;
+	let sessionSearchTimer: ReturnType<typeof setTimeout> | undefined;
+	let inspectorTab: "changes" | "terminal" | "usage" = "changes";
 	let connectionStatus: "connecting" | "connected" | "disconnected" = "connecting";
 	let eventStream: EventSource | undefined;
 	let draftValue = "";
@@ -154,7 +158,7 @@
 		console.warn(`[orrery-web] ${message}`);
 	}
 
-	function selectInspectorTab(tab: "changes" | "terminal" | "context"): void {
+	function selectInspectorTab(tab: "changes" | "terminal" | "usage"): void {
 		inspectorTab = tab;
 	}
 
@@ -224,6 +228,39 @@
 			if (requestId === sessionListRequest) sessionSummaries = payload.sessions;
 		} catch (error) {
 			if (requestId === sessionListRequest) logNotice(error instanceof Error ? error.message : String(error));
+		}
+	}
+
+	function searchSessions(query: string): void {
+		if (sessionSearchTimer) clearTimeout(sessionSearchTimer);
+		const trimmed = query.trim();
+		if (!trimmed) {
+			sessionSearchRequest += 1;
+			sessionMatches = [];
+			sessionSearching = false;
+			return;
+		}
+		sessionSearching = true;
+		sessionSearchTimer = setTimeout(() => {
+			sessionSearchTimer = undefined;
+			void runSessionSearch(trimmed);
+		}, 220);
+	}
+
+	async function runSessionSearch(query: string): Promise<void> {
+		const requestId = ++sessionSearchRequest;
+		try {
+			const response = await fetch(`/api/sessions/search?q=${encodeURIComponent(query)}`);
+			const payload = (await response.json()) as WebSessionSearchResponse & { error?: string };
+			if (!response.ok) throw new Error(payload.error ?? `搜索失败 (${response.status})`);
+			if (requestId === sessionSearchRequest) sessionMatches = payload.matches;
+		} catch (error) {
+			if (requestId === sessionSearchRequest) {
+				sessionMatches = [];
+				logNotice(error instanceof Error ? error.message : String(error));
+			}
+		} finally {
+			if (requestId === sessionSearchRequest) sessionSearching = false;
 		}
 	}
 
@@ -352,7 +389,10 @@
 		<SessionSidebar
 			snapshot={serverSnapshot}
 			sessions={sessionSummaries}
+			matches={sessionMatches}
+			searching={sessionSearching}
 			onSessionSelect={selectSession}
+			onSearch={searchSessions}
 			onNewSession={newSession}
 			newSessionDisabled={state.phase === "running" || state.phase === "stopping"}
 		/>

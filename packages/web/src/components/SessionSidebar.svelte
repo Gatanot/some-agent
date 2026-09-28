@@ -1,10 +1,12 @@
 <script lang="ts">
-	import { Search } from "@lucide/svelte";
+	import { Plus, Search } from "@lucide/svelte";
 	import type { WebSessionSummary, WebSnapshot } from "../protocol.ts";
 
 	export let snapshot: WebSnapshot | undefined;
 	export let sessions: WebSessionSummary[] = [];
 	export let onSessionSelect: (id: string) => void;
+	export let onNewSession: () => void;
+	export let newSessionDisabled = false;
 
 	let query = "";
 
@@ -58,13 +60,15 @@
 		<div class="sidebar-brand-row">
 			<div class="brand"><span class="brand-mark" aria-hidden="true"><span></span></span><span class="brand-name">Orrery</span></div>
 		</div>
-		<div class="session-heading">
-			<div><h2 class="section-title">会话</h2></div>
-		</div>
-		<div class="search-wrap">
-			<Search size={15} aria-hidden="true" />
-			<label class="visually-hidden" for="session-search">搜索会话</label>
-			<input id="session-search" class="session-search" type="search" bind:value={query} placeholder="搜索会话" />
+		<div class="search-row">
+			<div class="search-wrap">
+				<Search size={15} aria-hidden="true" />
+				<label class="visually-hidden" for="session-search">搜索会话</label>
+				<input id="session-search" class="session-search" type="search" bind:value={query} placeholder="搜索会话" />
+			</div>
+			<button class="icon-button new-session-button" type="button" aria-label="新建会话" title="新建会话" disabled={newSessionDisabled} on:click={onNewSession}>
+				<Plus size={16} strokeWidth={1.9} />
+			</button>
 		</div>
 	</div>
 

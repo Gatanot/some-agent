@@ -351,6 +351,8 @@
 			snapshot={serverSnapshot}
 			sessions={sessionSummaries}
 			onSessionSelect={selectSession}
+			onNewSession={newSession}
+			newSessionDisabled={state.phase === "running" || state.phase === "stopping"}
 		/>
 		<section class="main-panel" aria-label="会话工作区">
 			<header class="session-bar">

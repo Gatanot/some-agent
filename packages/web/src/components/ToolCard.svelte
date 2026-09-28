@@ -6,7 +6,7 @@
 
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { ChevronDown } from "@lucide/svelte";
+	import { ChevronDown, Images } from "@lucide/svelte";
 	import CopyButton from "./CopyButton.svelte";
 	import type { DiffLine, Tool } from "../types.ts";
 
@@ -67,12 +67,23 @@
 			<ChevronDown size={13} class={`tool-caret${open ? " open" : ""}`} aria-hidden="true" />
 		</span>
 		{#if tool.target}<span class="tool-target">{tool.target}</span>{/if}
+		{#if tool.images?.length}<span class="tool-image-count" title={`包含 ${tool.images.length} 张图片`}><Images size={12} aria-hidden="true" />{tool.images.length}</span>{/if}
 	</button>
 	{#if open}
 		<div class="tool-detail" id={detailId}>
+			{#if tool.images?.length}
+				<div class="tool-images">
+					{#each tool.images as image, index (index)}
+						<figure class="tool-image">
+							<img src={`data:${image.mimeType};base64,${image.data}`} alt={`工具读取的图片 ${index + 1}`} loading="lazy" />
+							<figcaption>{image.mimeType}</figcaption>
+						</figure>
+					{/each}
+				</div>
+			{/if}
 			{#if tool.outputType === "diff"}
 				<pre class="tool-output">{#each diffLines(tool) as line}<span class={`diff-line ${line.kind}`}>{line.text}</span>{/each}</pre>
-			{:else}
+			{:else if tool.output || !tool.images?.length}
 				<pre class="tool-output">{tool.output || (tool.status === "running" ? "等待结果…" : "（无输出）")}</pre>
 			{/if}
 		</div>

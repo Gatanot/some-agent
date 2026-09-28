@@ -135,6 +135,57 @@ test("keeps streaming assistant and partial tool execution visible after refresh
 	assert.match(toolMessage?.tools?.[0]?.output as string, /checking/);
 });
 
+test("surfaces images returned by tools instead of dropping them", () => {
+	const state = snapshotToAppState(
+		snapshot({
+			messages: [
+				{
+					role: "assistant",
+					content: [{ type: "toolCall", id: "call-img", name: "read", arguments: { path: "shot.png" } }],
+					timestamp: 1,
+				},
+				{
+					role: "toolResult",
+					toolCallId: "call-img",
+					toolName: "read",
+					content: [
+						{ type: "text", text: "Read image file [image/png]" },
+						{ type: "image", data: "aGVsbG8=", mimeType: "image/png" },
+					],
+					isError: false,
+					timestamp: 2,
+				},
+			],
+		}),
+		"connected",
+	);
+
+	const tool = state.messages.find((message) => message.role === "tools")?.tools?.[0];
+	assert.deepEqual(tool?.images, [{ mimeType: "image/png", data: "aGVsbG8=" }]);
+	assert.match(tool?.output as string, /Read image file/);
+});
+
+test("renders image content parts as image blocks", () => {
+	const state = snapshotToAppState(
+		snapshot({
+			messages: [
+				{
+					role: "user",
+					content: [
+						{ type: "text", text: "看这张图" },
+						{ type: "image", data: "aGVsbG8=", mimeType: "image/png" },
+					],
+					timestamp: 1,
+				},
+			],
+		}),
+		"connected",
+	);
+
+	const image = state.messages[0]?.blocks?.find((block) => block.type === "image");
+	assert.deepEqual(image, { type: "image", mimeType: "image/png", data: "aGVsbG8=" });
+});
+
 test("renders edit results as diff lines", () => {
 	const state = snapshotToAppState(
 		snapshot({

@@ -1,7 +1,7 @@
 import { parseDiffLines } from "./diff.ts";
 import { renderMarkdown } from "./markdown.ts";
 import type { WebSnapshot, WebToolExecution } from "./protocol.ts";
-import type { AppState, Block, DiffLine, Message, Tool } from "./types.ts";
+import type { AppState, Block, DiffLine, Message, Tool, ToolImage } from "./types.ts";
 
 interface WireRecord {
 	[key: string]: unknown;
@@ -68,6 +68,20 @@ function resultText(value: unknown): string {
 	return compactJson(value);
 }
 
+/** Extracts base64 image parts from a tool result or content array; pi already embeds them. */
+function imagesFrom(value: unknown): ToolImage[] {
+	const content = arrayValue(record(value)?.content ?? value);
+	const images: ToolImage[] = [];
+	for (const item of content) {
+		const part = record(item);
+		if (part?.type !== "image") continue;
+		const data = stringValue(part.data);
+		const mimeType = stringValue(part.mimeType);
+		if (data && mimeType) images.push({ mimeType, data });
+	}
+	return images;
+}
+
 function thinkingLabel(level: string | undefined): string {
 	switch (level) {
 		case "off":
@@ -101,7 +115,10 @@ function messageBlocks(message: WireRecord): Block[] {
 			const text = stringValue(part.thinking) ?? "";
 			if (text) blocks.push({ type: "thinking", text, html: renderMarkdown(text) });
 		} else if (part.type === "image") {
-			blocks.push({ type: "text", text: "[图片]", html: renderMarkdown("[图片]") });
+			const data = stringValue(part.data);
+			const mimeType = stringValue(part.mimeType);
+			if (data && mimeType) blocks.push({ type: "image", mimeType, data });
+			else blocks.push({ type: "text", text: "[图片]", html: renderMarkdown("[图片]") });
 		}
 	}
 	return blocks;
@@ -138,6 +155,7 @@ function toolFromCall(call: WireRecord, result: WireRecord | undefined, executio
 	const rawArgs = call.arguments ?? execution?.args;
 	const timeout = record(rawArgs)?.timeout;
 	const diff = diffOutput(outputValue);
+	const images = imagesFrom(outputValue);
 	return {
 		id,
 		name,
@@ -146,6 +164,7 @@ function toolFromCall(call: WireRecord, result: WireRecord | undefined, executio
 		statusText: running ? "Running" : isError ? "Fail" : "Done",
 		input: compactJson(rawArgs),
 		...(diff ? { output: diff, outputType: "diff" as const } : { output: resultText(outputValue) }),
+		...(images.length > 0 ? { images } : {}),
 		...(execution?.startedAt === undefined ? {} : { startedAt: execution.startedAt }),
 		...(execution?.finishedAt === undefined ? {} : { finishedAt: execution.finishedAt }),
 		...(typeof timeout === "number" ? { timeoutSeconds: timeout } : {}),
@@ -209,14 +228,18 @@ function mapCommittedMessages(
 
 	messages.forEach((message, index) => {
 		if (message.role === "user") {
-			const text = contentText(message.content);
+			const blocks = messageBlocks(message);
+			if (blocks.length === 0) {
+				const text = contentText(message.content);
+				blocks.push({ type: "text", text, html: renderMarkdown(text) });
+			}
 			output.push({
 				id: `user-${index}-${String(message.timestamp ?? "")}`,
 				role: "user",
 				label: "你",
 				avatar: "你",
 				time: timestamp(message.timestamp),
-				blocks: [{ type: "text", text, html: renderMarkdown(text) }],
+				blocks,
 			});
 		} else if (message.role === "assistant") {
 			for (const call of toolCalls(message)) {
@@ -225,6 +248,7 @@ function mapCommittedMessages(
 			}
 			output.push(...assistantMessage(message, index, executions, results));
 		} else if (message.role === "toolResult" && !knownToolCalls.has(stringValue(message.toolCallId) ?? "")) {
+			const images = imagesFrom(message);
 			output.push({
 				id: `tool-result-${index}`,
 				role: "tools",
@@ -240,6 +264,7 @@ function mapCommittedMessages(
 						statusText: message.isError === true ? "Fail" : "Done",
 						input: "",
 						output: resultText(message),
+						...(images.length > 0 ? { images } : {}),
 					},
 				],
 			});

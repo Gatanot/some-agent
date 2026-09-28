@@ -70,7 +70,7 @@
 				<span class="context-usage" title={contextWindow ? `${formatTokens(usedTokens)} / ${formatTokens(contextWindow)} tokens` : state.usage}>{contextLabel}</span>
 				<div class="composer-actions">
 					{#if state.phase === "running" && !draft.trim()}
-						<button class="secondary-button composer-button" type="button" on:click={onStop}><CircleStop size={16} />停止</button>
+						<button class="secondary-button composer-button send-button" type="button" aria-label="停止" title="停止" on:click={onStop}><CircleStop size={16} /></button>
 					{:else}
 						<button class="primary-button composer-button send-button" type="button" aria-label="发送" title="发送" disabled={state.unavailable || state.connection !== "connected" || state.noModel || !draft.trim()} on:click={onSend}><ArrowUp size={17} /></button>
 					{/if}

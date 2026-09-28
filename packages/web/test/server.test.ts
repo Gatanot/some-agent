@@ -738,17 +738,52 @@ test("queues a prompt while the agent is streaming instead of rejecting it", asy
 
 		const during = await request(fixture.baseUrl, "/api/state");
 		const duringSnapshot = during.body as unknown as WebSnapshot;
-		assert.deepEqual(duringSnapshot.queuedMessages?.steering, ["second"]);
+		assert.deepEqual(duringSnapshot.queuedMessages?.followUp, ["second"]);
+		assert.deepEqual(duringSnapshot.queuedMessages?.steering, []);
 
 		releaseFirst?.(fauxAssistantMessage("first reply"));
 		assert.equal((await firstPrompt).status, 200);
 
-		const after = await request(fixture.baseUrl, "/api/state");
-		const afterSnapshot = after.body as unknown as WebSnapshot;
-		assert.deepEqual(afterSnapshot.queuedMessages?.steering, []);
+		// The follow-up runs as its own turn after the first one settles.
+		const deadline = Date.now() + 3_000;
+		let afterSnapshot: WebSnapshot | undefined;
+		while (Date.now() < deadline) {
+			const after = await request(fixture.baseUrl, "/api/state");
+			afterSnapshot = after.body as unknown as WebSnapshot;
+			if (JSON.stringify(afterSnapshot.messages).includes("queued reply")) break;
+			await new Promise((resolve) => setTimeout(resolve, 20));
+		}
+		assert.ok(afterSnapshot);
+		assert.deepEqual(afterSnapshot.queuedMessages?.followUp, []);
 		assert.match(JSON.stringify(afterSnapshot.messages), /queued reply/);
 	} finally {
 		await events.reader.cancel();
+		await fixture.close();
+	}
+});
+
+test("reports project usage for the recent window", async () => {
+	const fixture = await createFixture([fauxAssistantMessage("unused")]);
+	try {
+		const usage = await request(fixture.baseUrl, "/api/usage?days=3");
+		assert.equal(usage.response.status, 200);
+		const payload = usage.body as unknown as { days: number; daily: unknown[]; models: unknown[] };
+		assert.equal(payload.days, 3);
+		assert.equal(payload.daily.length, 3);
+		assert.ok(Array.isArray(payload.models));
+	} finally {
+		await fixture.close();
+	}
+});
+
+test("returns a JSON 404 instead of the SPA for unknown API paths", async () => {
+	const fixture = await createFixture([fauxAssistantMessage("unused")]);
+	try {
+		const response = await fetch(`${fixture.baseUrl}/api/does-not-exist`);
+		assert.equal(response.status, 404);
+		assert.match(response.headers.get("content-type") ?? "", /application\/json/);
+		assert.match(await response.text(), /Not found/);
+	} finally {
 		await fixture.close();
 	}
 });

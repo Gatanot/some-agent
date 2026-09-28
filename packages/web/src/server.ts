@@ -15,7 +15,11 @@ import type {
 	WebSnapshot,
 	WebSnapshotDelta,
 	WebToolExecution,
+	WebUsage,
+	WebUsageDay,
+	WebUsageModel,
 } from "./protocol.ts";
+import { localDateKey, summarizeUsage, type UsageSummary } from "./usage.ts";
 
 const configuredPort = parsePort(process.env.PI_WEB_PORT ?? "3210");
 const configuredCwd = process.env.PI_WEB_CWD ?? resolve(import.meta.dirname, "../../..");
@@ -29,6 +33,8 @@ let isDevelopment = process.env.PI_WEB_MODE !== "production";
 const MAX_REQUEST_BYTES = 64 * 1024;
 const SSE_HEARTBEAT_MS = 15_000;
 const MAX_QUEUED_SSE_FRAMES = 16;
+const DEFAULT_USAGE_DAYS = 14;
+const MAX_USAGE_DAYS = 90;
 
 interface SseSubscriber {
 	response: ServerResponse;
@@ -81,6 +87,7 @@ let gitRefreshId = 0;
 let gitState: WebGitState = { state: "loading", files: [] };
 const activeToolExecutions = new Map<string, WebToolExecution>();
 const sessionCatalog = new Map<string, SessionInfo>();
+const usageCache = new Map<string, { modified: number; since: number; summary: UsageSummary }>();
 const subscribers = new Set<SseSubscriber>();
 
 function parsePort(value: string): number {
@@ -139,6 +146,82 @@ async function listSessions(): Promise<WebSessionsResponse> {
 	return {
 		sessions: sessions.map(sessionSummary),
 		...(session?.sessionId ? { currentSessionId: session.sessionId } : {}),
+	};
+}
+
+function parseUsageDays(value: string | null): number {
+	if (!value) return DEFAULT_USAGE_DAYS;
+	const parsed = Number.parseInt(value, 10);
+	if (!Number.isInteger(parsed) || parsed < 1 || parsed > MAX_USAGE_DAYS) return DEFAULT_USAGE_DAYS;
+	return parsed;
+}
+
+/** Local midnight `offsetDays` before today; the usage window includes today. */
+function dayStart(offsetDays: number): Date {
+	const now = new Date();
+	return new Date(now.getFullYear(), now.getMonth(), now.getDate() - offsetDays);
+}
+
+async function sessionUsage(path: string, modified: number, since: number): Promise<UsageSummary> {
+	const cached = usageCache.get(path);
+	if (cached && cached.modified === modified && cached.since === since) return cached.summary;
+	const summary = summarizeUsage(SessionManager.open(path).getEntries(), since);
+	usageCache.set(path, { modified, since, summary });
+	return summary;
+}
+
+/** Aggregate usage for every project session touched within the recent window. */
+async function projectUsage(days: number): Promise<WebUsage> {
+	const sessions = await (sessionLister?.(cwd) ?? SessionManager.list(cwd));
+	const start = dayStart(days - 1);
+	const since = start.getTime();
+	const models = new Map<string, WebUsageModel>();
+	const daily = new Map<string, WebUsageDay>();
+
+	for (const info of sessions) {
+		if (info.modified.getTime() < since) continue;
+		let summary: UsageSummary;
+		try {
+			summary = await sessionUsage(info.path, info.modified.getTime(), since);
+		} catch {
+			// A single unreadable session should not fail the whole report.
+			continue;
+		}
+		for (const model of summary.models) {
+			const merged = models.get(model.key) ?? { key: model.key, tokens: 0, cost: 0 };
+			merged.tokens += model.tokens;
+			merged.cost += model.cost;
+			models.set(model.key, merged);
+		}
+		for (const day of summary.daily) {
+			const merged = daily.get(day.date) ?? { date: day.date, tokens: 0, cost: 0 };
+			merged.tokens += day.tokens;
+			merged.cost += day.cost;
+			daily.set(day.date, merged);
+		}
+	}
+
+	let totalTokens = 0;
+	let totalCost = 0;
+	for (const model of models.values()) {
+		totalTokens += model.tokens;
+		totalCost += model.cost;
+	}
+
+	// Fill every day in the window so the client renders a continuous series.
+	const filled: WebUsageDay[] = [];
+	for (let offset = 0; offset < days; offset++) {
+		const date = new Date(start.getFullYear(), start.getMonth(), start.getDate() + offset);
+		const key = localDateKey(date);
+		filled.push(daily.get(key) ?? { date: key, tokens: 0, cost: 0 });
+	}
+
+	return {
+		days,
+		totalTokens,
+		totalCost,
+		models: [...models.values()].sort((a, b) => b.tokens - a.tokens || b.cost - a.cost),
+		daily: filled,
 	};
 }
 
@@ -230,7 +313,7 @@ function sessionState(): WebSnapshot {
 }
 
 function sendJson(response: ServerResponse, status: number, body: unknown): void {
-	response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+	response.writeHead(status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
 	response.end(wireStringify(body));
 }
 
@@ -554,6 +637,15 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 		return;
 	}
 
+	if (url.pathname === "/api/usage" && request.method === "GET") {
+		try {
+			sendJson(response, 200, await projectUsage(parseUsageDays(url.searchParams.get("days"))));
+		} catch (error) {
+			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
+		}
+		return;
+	}
+
 	if (url.pathname === "/api/git/refresh" && request.method === "POST") {
 		if (sessionOperation || activePrompt || session?.isStreaming) {
 			sendJson(response, 409, { error: "Cannot refresh Git while the session is busy" });
@@ -613,9 +705,9 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 				sendJson(response, 409, { error: "正在停止当前任务" });
 				return;
 			}
-			// Queue the message into the running turn instead of rejecting it (same as pi's Enter).
+			// Queue the message after the running turn instead of rejecting it (pi's follow-up semantics).
 			try {
-				await activeSession.prompt(body.text, { streamingBehavior: "steer" });
+				await activeSession.prompt(body.text, { streamingBehavior: "followUp" });
 				sendJson(response, 200, { ok: true, queued: true });
 			} catch (error) {
 				sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
@@ -852,6 +944,13 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 		} catch (error) {
 			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
 		}
+		return;
+	}
+
+	// Never fall through to the SPA for API paths: an HTML 200 would parse as a failed JSON
+	// response on the client and hang the caller instead of surfacing a clear error.
+	if (url.pathname.startsWith("/api/") || url.pathname === "/events") {
+		sendJson(response, 404, { error: "Not found" });
 		return;
 	}
 

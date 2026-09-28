@@ -238,7 +238,10 @@ pre { margin: 0; padding: 11px; overflow-x: auto; color: var(--code-text); font-
 .diff-line.add { background: var(--diff-add-bg); color: var(--diff-add-text); }
 .diff-line.remove { background: var(--diff-remove-bg); color: var(--diff-remove-text); }
 .diff-line.context { color: var(--text-muted); }
-.error-block { margin-top: 12px; padding: 11px 13px; border: 1px solid var(--danger-line); border-radius: 4px; background: var(--danger-bg); color: var(--danger); }
+.error-block { display: grid; gap: 9px; margin-top: 12px; padding: 11px 13px; border: 1px solid var(--danger-line); border-radius: 4px; background: var(--danger-bg); color: var(--danger); }
+.error-actions { display: flex; }
+.error-retry { min-height: 28px; padding: 3px 10px; border: 1px solid var(--danger-line); background: transparent; color: var(--danger); font-size: 11px; cursor: pointer; }
+.error-retry:hover { border-color: var(--danger); }
 .notice { margin: 4px 0 23px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-raised); }
 .notice.empty { background: var(--surface-raised); }
 .notice.error { border-color: var(--danger-line); background: var(--danger-bg); }

@@ -217,6 +217,7 @@ test("shows a turn error at the end of the conversation", () => {
 		"connected",
 	);
 	assert.equal(withMessageError.messages.at(-1)?.error, "provider failed");
+	assert.equal(withMessageError.messages.at(-1)?.errorAction, "retry");
 	assert.equal(withMessageError.notice, undefined);
 
 	// A session-level error has no assistant message to attach to, so it is appended.
@@ -229,6 +230,7 @@ test("shows a turn error at the end of the conversation", () => {
 		"connected",
 	);
 	assert.equal(withoutMessageError.messages.at(-1)?.error, "session failed to start");
+	assert.equal(withoutMessageError.messages.at(-1)?.errorAction, "retry");
 	assert.equal(withoutMessageError.notice, undefined);
 });
 

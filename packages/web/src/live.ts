@@ -305,17 +305,30 @@ function mapMessages(snapshot: WebSnapshot): Message[] {
 		}
 	}
 	// A turn-level error must stay visible at the end of the conversation even when the failed
-	// assistant message carried no content blocks of its own.
-	if (snapshot.error && !output.some((message) => message.error === snapshot.error)) {
-		output.push({
-			id: "turn-error",
-			role: "assistant",
-			label: "Orrery",
-			avatar: "!",
-			time: "现在",
-			blocks: [],
-			error: snapshot.error,
-		});
+	// assistant message carried no content blocks of its own. Attach the retry action to the latest
+	// message carrying the error, cloning it so the committed cache stays untouched.
+	if (snapshot.error) {
+		let index = -1;
+		for (let i = output.length - 1; i >= 0; i--) {
+			if (output[i]?.error === snapshot.error) {
+				index = i;
+				break;
+			}
+		}
+		if (index >= 0) {
+			output[index] = { ...output[index], errorAction: "retry" };
+		} else {
+			output.push({
+				id: "turn-error",
+				role: "assistant",
+				label: "Orrery",
+				avatar: "!",
+				time: "现在",
+				blocks: [],
+				error: snapshot.error,
+				errorAction: "retry",
+			});
+		}
 	}
 	return output;
 }

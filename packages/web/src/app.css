@@ -137,6 +137,7 @@ button:disabled { cursor: default; opacity: .48; }
 .session-dot.active { background: var(--success); }
 .session-copy { min-width: 0; }
 .session-title { display: block; overflow: hidden; color: var(--text); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.session-snippet { display: -webkit-box; margin-top: 4px; overflow: hidden; color: var(--text-subtle); font-size: 10px; line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .session-meta { display: flex; justify-content: space-between; gap: 8px; margin-top: 5px; color: var(--text-subtle); font-size: 10px; }
 .session-meta span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-placeholder { padding: 22px 10px; color: var(--text-subtle); text-align: center; }

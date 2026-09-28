@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta name="theme-color" content="#17191c" />
+		<title>Orrery Web</title>
+		<script>
+			(() => {
+				// Keep the storage key and color values in sync with the theme logic in App.svelte.
+				let storedTheme = null;
+				try {
+					storedTheme = localStorage.getItem("orrery.theme");
+				} catch {
+					// Storage can be unavailable; fall back to the system preference.
+				}
+				const theme =
+					storedTheme === "light" || storedTheme === "dark"
+						? storedTheme
+						: window.matchMedia("(prefers-color-scheme: light)").matches
+							? "light"
+							: "dark";
+				document.documentElement.dataset.theme = theme;
+				const themeMeta = document.querySelector('meta[name="theme-color"]');
+				if (themeMeta) themeMeta.setAttribute("content", theme === "light" ? "#f4f5f7" : "#17191c");
+			})();
+		</script>
+	</head>
+	<body>
+		<div id="app"></div>
+		<script type="module" src="/src/main.js"></script>
+	</body>
+</html>

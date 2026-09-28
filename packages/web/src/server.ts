@@ -1,0 +1,984 @@
+import { readFile, stat } from "node:fs/promises";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import type { AddressInfo } from "node:net";
+import { extname, join, resolve, sep } from "node:path";
+import { pathToFileURL } from "node:url";
+import type { AgentSession, AgentSessionEvent, SessionInfo } from "@gatanot/orrery";
+import { createAgentSession, SessionManager } from "@gatanot/orrery";
+import { createServer as createViteServer, type ViteDevServer } from "vite";
+import { readGitDiff, readGitStatus } from "./git.ts";
+import type {
+	WebEventEnvelope,
+	WebGitState,
+	WebSessionSummary,
+	WebSessionsResponse,
+	WebSnapshot,
+	WebSnapshotDelta,
+	WebToolExecution,
+} from "./protocol.ts";
+
+const configuredPort = parsePort(process.env.PI_WEB_PORT ?? "3210");
+const configuredCwd = process.env.PI_WEB_CWD ?? resolve(import.meta.dirname, "../../..");
+const webRoot = resolve(import.meta.dirname, "..");
+const distRoot = join(webRoot, "dist");
+const pagePath = join(distRoot, "index.html");
+
+let port = configuredPort;
+let cwd = configuredCwd;
+let isDevelopment = process.env.PI_WEB_MODE !== "production";
+const MAX_REQUEST_BYTES = 64 * 1024;
+const SSE_HEARTBEAT_MS = 15_000;
+const MAX_QUEUED_SSE_FRAMES = 16;
+
+interface SseSubscriber {
+	response: ServerResponse;
+	heartbeat: ReturnType<typeof setInterval>;
+	queue: string[];
+	blocked: boolean;
+	closed: boolean;
+}
+
+class HttpRequestError extends Error {
+	readonly status: number;
+
+	constructor(status: number, message: string) {
+		super(message);
+		this.name = "HttpRequestError";
+		this.status = status;
+	}
+}
+
+export type SessionSelection = "recent" | "new" | { path: string };
+
+type SessionFactory = (selection: SessionSelection, cwd: string) => Promise<AgentSession>;
+type SessionLister = (cwd: string) => Promise<SessionInfo[]>;
+
+export interface WebServerOptions {
+	cwd?: string;
+	port?: number;
+	mode?: "development" | "production";
+	sessionFactory?: SessionFactory;
+	sessionLister?: SessionLister;
+}
+
+export interface WebServerHandle {
+	server: Server;
+	readonly port: number;
+	close: () => Promise<void>;
+}
+
+let sessionFactory: SessionFactory | undefined;
+let sessionLister: SessionLister | undefined;
+let session: AgentSession | undefined;
+let sessionError: string | undefined;
+let promptError: string | undefined;
+let activePrompt: { session: AgentSession } | undefined;
+let aborting = false;
+let sessionOperation: Promise<void> | undefined;
+let vite: ViteDevServer | undefined;
+let sequence = 0;
+let gitRefreshId = 0;
+let gitState: WebGitState = { state: "loading", files: [] };
+const activeToolExecutions = new Map<string, WebToolExecution>();
+const sessionCatalog = new Map<string, SessionInfo>();
+const subscribers = new Set<SseSubscriber>();
+
+function parsePort(value: string): number {
+	const parsed = Number(value);
+	if (!Number.isInteger(parsed) || parsed < 1 || parsed > 65_535) {
+		throw new Error(`PI_WEB_PORT must be an integer between 1 and 65535, received ${value}`);
+	}
+	return parsed;
+}
+
+async function validateWorkingDirectory(): Promise<void> {
+	try {
+		const info = await stat(cwd);
+		if (!info.isDirectory()) throw new Error("path is not a directory");
+	} catch (error) {
+		throw new Error(
+			`PI_WEB_CWD is not a readable directory: ${cwd} (${error instanceof Error ? error.message : String(error)})`,
+		);
+	}
+}
+
+function wireStringify(value: unknown): string {
+	// Track only the current ancestor path so shared (non-circular) references serialize
+	// normally instead of being mistaken for cycles.
+	const ancestors: object[] = [];
+	return (
+		JSON.stringify(value, function (_key: string, nested: unknown) {
+			if (typeof nested === "bigint") return nested.toString();
+			if (typeof nested === "function") return undefined;
+			if (typeof nested === "object" && nested !== null) {
+				while (ancestors.length > 0 && ancestors[ancestors.length - 1] !== this) ancestors.pop();
+				if (ancestors.includes(nested)) return "[Circular]";
+				ancestors.push(nested);
+			}
+			return nested;
+		}) ?? "null"
+	);
+}
+
+function sessionSummary(info: SessionInfo): WebSessionSummary {
+	return {
+		id: info.id,
+		...(info.name ? { name: info.name } : {}),
+		cwd: info.cwd,
+		created: info.created.toISOString(),
+		modified: info.modified.toISOString(),
+		messageCount: info.messageCount,
+		firstMessage: info.firstMessage.slice(0, 240),
+	};
+}
+
+async function listSessions(): Promise<WebSessionsResponse> {
+	const sessions = await (sessionLister?.(cwd) ?? SessionManager.list(cwd));
+	sessionCatalog.clear();
+	for (const info of sessions) sessionCatalog.set(info.id, info);
+	return {
+		sessions: sessions.map(sessionSummary),
+		...(session?.sessionId ? { currentSessionId: session.sessionId } : {}),
+	};
+}
+
+function runningExecutions(): WebToolExecution[] {
+	return [...activeToolExecutions.values()]
+		.filter((execution) => execution.status === "running")
+		.map((execution) => ({ ...execution }));
+}
+
+// Completed executions already have their args/result in `messages`, so a full snapshot only
+// needs the status and timing; shipping the payload again would bloat every snapshot.
+function completedExecution(execution: WebToolExecution): WebToolExecution {
+	return {
+		toolCallId: execution.toolCallId,
+		toolName: execution.toolName,
+		args: execution.args,
+		status: execution.status,
+		...(execution.isError === undefined ? {} : { isError: execution.isError }),
+		...(execution.startedAt === undefined ? {} : { startedAt: execution.startedAt }),
+		...(execution.finishedAt === undefined ? {} : { finishedAt: execution.finishedAt }),
+	};
+}
+
+function snapshotExecutions(): WebToolExecution[] {
+	return [...activeToolExecutions.values()].map((execution) =>
+		execution.status === "running" ? { ...execution } : completedExecution(execution),
+	);
+}
+
+function sessionDelta(): WebSnapshotDelta {
+	const current = session?.agent.state;
+	const lastMessage = current?.messages.at(-1);
+	const wasAborted = lastMessage?.role === "assistant" && lastMessage.stopReason === "aborted";
+	const streaming = Boolean(activePrompt) || Boolean(session?.isStreaming);
+	const error = promptError ?? sessionError ?? (wasAborted ? undefined : current?.errorMessage);
+	const phase: WebSnapshotDelta["phase"] = !session
+		? "unavailable"
+		: aborting
+			? "stopping"
+			: streaming
+				? "streaming"
+				: error
+					? "error"
+					: "idle";
+	return {
+		protocolVersion: 1,
+		sequence,
+		ready: session !== undefined,
+		cwd,
+		prompting: streaming,
+		phase,
+		...(current?.streamingMessage === undefined ? {} : { streamingMessage: current.streamingMessage }),
+		pendingToolCalls: current ? [...current.pendingToolCalls] : [],
+		toolExecutions: runningExecutions(),
+		...(session ? { contextUsage: session.getContextUsage() } : {}),
+		...(session ? { thinkingLevel: session.thinkingLevel, sessionId: session.sessionId } : {}),
+		...(session?.sessionName ? { sessionName: session.sessionName } : {}),
+		...(session
+			? {
+					queuedMessages: {
+						steering: [...session.getSteeringMessages()],
+						followUp: [...session.getFollowUpMessages()],
+					},
+				}
+			: {}),
+		...(error ? { error } : {}),
+	};
+}
+
+function sessionState(): WebSnapshot {
+	const models = session?.modelRuntime.getAvailableSnapshot() ?? [];
+	const thinkingLevels = session?.getAvailableThinkingLevels() ?? [];
+	return {
+		messages: session?.agent.state.messages ?? [],
+		...sessionDelta(),
+		// Full snapshots list every execution so the client can keep status/timing for tools
+		// whose result lives in `messages`.
+		toolExecutions: snapshotExecutions(),
+		git: gitState,
+		...(session?.model ? { model: { provider: session.model.provider, id: session.model.id } } : {}),
+		models: models.map((model) => ({
+			provider: model.provider,
+			id: model.id,
+			name: model.name,
+			contextWindow: model.contextWindow,
+		})),
+		thinkingLevels,
+	};
+}
+
+function sendJson(response: ServerResponse, status: number, body: unknown): void {
+	response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
+	response.end(wireStringify(body));
+}
+
+function sseFrame(event: string, data: unknown): string {
+	return `event: ${event}\ndata: ${wireStringify(data)}\n\n`;
+}
+
+function removeSubscriber(subscriber: SseSubscriber, destroy = false): void {
+	if (subscriber.closed) return;
+	subscriber.closed = true;
+	subscribers.delete(subscriber);
+	clearInterval(subscriber.heartbeat);
+	if (destroy && !subscriber.response.writableEnded) subscriber.response.destroy();
+}
+
+function flushSubscriber(subscriber: SseSubscriber): void {
+	if (subscriber.closed || subscriber.blocked) return;
+	while (subscriber.queue.length > 0) {
+		const frame = subscriber.queue.shift();
+		if (frame === undefined) return;
+		try {
+			if (!subscriber.response.write(frame)) {
+				subscriber.blocked = true;
+				subscriber.response.once("drain", () => {
+					subscriber.blocked = false;
+					flushSubscriber(subscriber);
+				});
+				return;
+			}
+		} catch {
+			removeSubscriber(subscriber, true);
+			return;
+		}
+	}
+}
+
+function enqueueSubscriber(subscriber: SseSubscriber, frame: string): void {
+	if (subscriber.closed) return;
+	if (subscriber.queue.length >= MAX_QUEUED_SSE_FRAMES) {
+		// The client is behind. Replace the pending backlog with one full snapshot instead of
+		// dropping the connection: a snapshot supersedes every queued update, so the client
+		// resyncs from a single frame once it drains.
+		subscriber.queue = [sseFrame("snapshot", snapshotEnvelope())];
+	}
+	subscriber.queue.push(frame);
+	flushSubscriber(subscriber);
+}
+
+function snapshotEnvelope(): WebEventEnvelope {
+	return { kind: "snapshot", snapshot: sessionState() };
+}
+
+// Events that only touch the live streaming view. Everything else (new messages, session
+// changes, git refreshes) ships a full snapshot so the transcript stays in sync.
+const LIGHT_EVENT_TYPES = new Set([
+	"message_update",
+	"tool_execution_start",
+	"tool_execution_update",
+	"tool_execution_end",
+	"thinking_level_changed",
+	"session_info_changed",
+	"queue_update",
+]);
+
+function updateEnvelope(eventType: string): WebEventEnvelope {
+	if (LIGHT_EVENT_TYPES.has(eventType)) return { kind: "update", patch: sessionDelta(), eventType };
+	return { kind: "snapshot", snapshot: sessionState(), eventType };
+}
+
+function broadcast(envelope: WebEventEnvelope): void {
+	const frame = sseFrame(envelope.kind, envelope);
+	for (const subscriber of subscribers) enqueueSubscriber(subscriber, frame);
+}
+
+function broadcastSnapshot(): void {
+	broadcast(snapshotEnvelope());
+}
+
+async function refreshGitStatus(): Promise<void> {
+	const requestId = ++gitRefreshId;
+	const result = await readGitStatus(cwd);
+	if (requestId !== gitRefreshId) return;
+	gitState = result;
+	sequence += 1;
+	broadcastSnapshot();
+}
+
+function broadcastUpdate(eventType: string): void {
+	broadcast(updateEnvelope(eventType));
+}
+
+function updateToolExecution(event: AgentSessionEvent): void {
+	if (event.type === "tool_execution_start") {
+		activeToolExecutions.set(event.toolCallId, {
+			toolCallId: event.toolCallId,
+			toolName: event.toolName,
+			args: event.args,
+			status: "running",
+			startedAt: Date.now(),
+		});
+	} else if (event.type === "tool_execution_update") {
+		const previous = activeToolExecutions.get(event.toolCallId);
+		activeToolExecutions.set(event.toolCallId, {
+			toolCallId: event.toolCallId,
+			toolName: event.toolName,
+			args: event.args,
+			status: previous?.status ?? "running",
+			...(previous?.startedAt === undefined ? {} : { startedAt: previous.startedAt }),
+			...(previous?.result === undefined ? {} : { result: previous.result }),
+			partialResult: event.partialResult,
+		});
+	} else if (event.type === "tool_execution_end") {
+		const previous = activeToolExecutions.get(event.toolCallId);
+		activeToolExecutions.set(event.toolCallId, {
+			toolCallId: event.toolCallId,
+			toolName: event.toolName,
+			args: previous?.args,
+			status: event.isError ? "error" : "done",
+			...(previous?.startedAt === undefined ? {} : { startedAt: previous.startedAt }),
+			finishedAt: Date.now(),
+			result: event.result,
+			isError: event.isError,
+		});
+	}
+}
+
+function subscribeToSession(nextSession: AgentSession): void {
+	nextSession.subscribe((event) => {
+		if (event.type === "bash_execution_update") return;
+		updateToolExecution(event);
+		sequence += 1;
+		broadcastUpdate(event.type);
+	});
+}
+
+function createSessionManager(selection: SessionSelection): SessionManager {
+	if (selection === "recent") return SessionManager.continueRecent(cwd);
+	if (selection === "new") return SessionManager.create(cwd);
+	return SessionManager.open(selection.path, undefined, cwd);
+}
+
+async function openSession(selection: SessionSelection): Promise<void> {
+	try {
+		const created = sessionFactory
+			? await sessionFactory(selection, cwd)
+			: (await createAgentSession({ cwd, sessionManager: createSessionManager(selection) })).session;
+		const previous = session;
+		session = created;
+		sessionError = undefined;
+		promptError = undefined;
+		aborting = false;
+		activeToolExecutions.clear();
+		subscribeToSession(session);
+		if (previous) previous.dispose();
+		sequence += 1;
+		broadcastSnapshot();
+		if (previous) void refreshGitStatus();
+	} catch (error) {
+		sessionError = error instanceof Error ? error.message : String(error);
+		broadcastSnapshot();
+		throw error;
+	}
+}
+
+function startSessionOpen(selection: SessionSelection): Promise<void> {
+	const operation = openSession(selection);
+	sessionOperation = operation;
+	operation.then(
+		() => {
+			if (sessionOperation === operation) sessionOperation = undefined;
+		},
+		() => {
+			if (sessionOperation === operation) sessionOperation = undefined;
+		},
+	);
+	return operation;
+}
+
+async function ensureSession(): Promise<AgentSession> {
+	if (session) return session;
+	if (!sessionOperation) startSessionOpen("recent");
+	await sessionOperation;
+	if (!session) throw new Error(sessionError ?? "Unable to create an agent session");
+	return session;
+}
+
+async function readBody(request: IncomingMessage): Promise<Record<string, unknown>> {
+	const chunks: Buffer[] = [];
+	let total = 0;
+	for await (const chunk of request) {
+		const buffer = typeof chunk === "string" ? Buffer.from(chunk) : Buffer.from(chunk);
+		total += buffer.byteLength;
+		if (total > MAX_REQUEST_BYTES) throw new HttpRequestError(413, "Request body is too large");
+		chunks.push(buffer);
+	}
+	if (chunks.length === 0) return {};
+	const parsed: unknown = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+		throw new HttpRequestError(400, "Request body must be an object");
+	}
+	return parsed as Record<string, unknown>;
+}
+
+function isLocalUrl(value: string, expectedPort: number): boolean {
+	try {
+		const url = new URL(value.includes("://") ? value : `http://${value}`);
+		if (url.protocol !== "http:" && url.protocol !== "https:") return false;
+		if (!["127.0.0.1", "localhost", "::1"].includes(url.hostname)) return false;
+		return url.port === String(expectedPort);
+	} catch {
+		return false;
+	}
+}
+
+function isAllowedRequest(request: IncomingMessage): boolean {
+	if (!request.headers.host || !isLocalUrl(request.headers.host, port)) return false;
+	const origin = request.headers.origin;
+	if (origin === undefined) return true;
+	if (origin === "null") return false;
+	return isLocalUrl(origin, port);
+}
+
+function contentType(path: string): string {
+	return (
+		{
+			".html": "text/html; charset=utf-8",
+			".css": "text/css; charset=utf-8",
+			".js": "application/javascript; charset=utf-8",
+			".json": "application/json; charset=utf-8",
+			".svg": "image/svg+xml",
+			".png": "image/png",
+			".webp": "image/webp",
+			".ico": "image/x-icon",
+			".woff": "font/woff",
+			".woff2": "font/woff2",
+		}[extname(path).toLowerCase()] ?? "application/octet-stream"
+	);
+}
+
+async function serveFrontend(request: IncomingMessage, response: ServerResponse, url: URL): Promise<void> {
+	if (vite) {
+		const devServer = vite;
+		await new Promise<void>((resolveNext, reject) => {
+			devServer.middlewares(request, response, (error?: unknown) => {
+				if (error) reject(error);
+				else resolveNext();
+			});
+		});
+		if (!response.writableEnded && !response.headersSent) sendJson(response, 404, { error: "Not found" });
+		return;
+	}
+
+	let decodedPath: string;
+	try {
+		decodedPath = decodeURIComponent(url.pathname);
+	} catch {
+		sendJson(response, 400, { error: "Invalid URL" });
+		return;
+	}
+	const requestedPath = resolve(distRoot, `.${decodedPath}`);
+	if (requestedPath !== distRoot && !requestedPath.startsWith(`${distRoot}${sep}`)) {
+		sendJson(response, 403, { error: "Forbidden" });
+		return;
+	}
+	let filePath = requestedPath;
+	let contents: Buffer;
+	try {
+		contents = await readFile(filePath);
+	} catch {
+		filePath = pagePath;
+		try {
+			contents = await readFile(filePath);
+		} catch {
+			sendJson(response, 503, { error: "Web assets are not built" });
+			return;
+		}
+	}
+	response.writeHead(200, { "content-type": contentType(filePath), "cache-control": "no-cache" });
+	if (request.method === "HEAD") response.end();
+	else response.end(contents);
+}
+
+async function handle(request: IncomingMessage, response: ServerResponse): Promise<void> {
+	if (!isAllowedRequest(request)) {
+		sendJson(response, 403, { error: "Local requests only" });
+		return;
+	}
+	const url = new URL(request.url ?? "/", `http://${request.headers.host}`);
+
+	if (url.pathname === "/events" && request.method === "GET") {
+		response.writeHead(200, {
+			"content-type": "text/event-stream; charset=utf-8",
+			"cache-control": "no-cache",
+			connection: "keep-alive",
+		});
+		const subscriber: SseSubscriber = {
+			response,
+			heartbeat: setInterval(() => enqueueSubscriber(subscriber, ": keep-alive\n\n"), SSE_HEARTBEAT_MS),
+			queue: [],
+			blocked: false,
+			closed: false,
+		};
+		subscribers.add(subscriber);
+		request.on("close", () => removeSubscriber(subscriber));
+		response.on("close", () => removeSubscriber(subscriber));
+		enqueueSubscriber(subscriber, sseFrame("snapshot", snapshotEnvelope()));
+		return;
+	}
+
+	if (url.pathname === "/api/state" && request.method === "GET") {
+		sendJson(response, 200, sessionState());
+		return;
+	}
+
+	if (url.pathname === "/api/sessions" && request.method === "GET") {
+		try {
+			sendJson(response, 200, await listSessions());
+		} catch (error) {
+			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/git/refresh" && request.method === "POST") {
+		if (sessionOperation || activePrompt || session?.isStreaming) {
+			sendJson(response, 409, { error: "Cannot refresh Git while the session is busy" });
+			return;
+		}
+		await refreshGitStatus();
+		sendJson(response, 200, gitState);
+		return;
+	}
+
+	if (url.pathname === "/api/git/diff" && request.method === "GET") {
+		const filePath = url.searchParams.get("path");
+		if (!filePath) {
+			sendJson(response, 400, { error: "path is required" });
+			return;
+		}
+		if (gitState.state !== "ready" || !gitState.root) {
+			sendJson(response, 409, { error: "Git 状态不可用" });
+			return;
+		}
+		const file = gitState.files.find((entry) => entry.path === filePath);
+		if (!file) {
+			sendJson(response, 404, { error: "文件不在当前变更列表" });
+			return;
+		}
+		const { diff, truncated } = await readGitDiff(gitState.root, filePath, file.code === "??");
+		sendJson(response, 200, { path: filePath, diff, truncated });
+		return;
+	}
+
+	if (url.pathname === "/api/prompt" && request.method === "POST") {
+		let body: Record<string, unknown>;
+		try {
+			body = await readBody(request);
+		} catch (error) {
+			const status = error instanceof HttpRequestError ? error.status : 400;
+			sendJson(response, status, { error: error instanceof Error ? error.message : String(error) });
+			return;
+		}
+		if (typeof body.text !== "string" || !body.text.trim()) {
+			sendJson(response, 400, { error: "text is required" });
+			return;
+		}
+		if (sessionOperation && session) {
+			sendJson(response, 409, { error: "A session transition is already running" });
+			return;
+		}
+		let activeSession: AgentSession;
+		try {
+			activeSession = await ensureSession();
+		} catch (error) {
+			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
+			return;
+		}
+		if (activePrompt || activeSession.isStreaming) {
+			if (aborting) {
+				sendJson(response, 409, { error: "正在停止当前任务" });
+				return;
+			}
+			// Queue the message into the running turn instead of rejecting it (same as pi's Enter).
+			try {
+				await activeSession.prompt(body.text, { streamingBehavior: "steer" });
+				sendJson(response, 200, { ok: true, queued: true });
+			} catch (error) {
+				sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+			}
+			return;
+		}
+		if (aborting) {
+			sendJson(response, 409, { error: "正在停止当前任务" });
+			return;
+		}
+		promptError = undefined;
+		activeToolExecutions.clear();
+		activePrompt = { session: activeSession };
+		sequence += 1;
+		broadcastSnapshot();
+		try {
+			await activeSession.prompt(body.text);
+			sendJson(response, 200, { ok: true });
+		} catch (error) {
+			const lastMessage = activeSession.agent.state.messages.at(-1);
+			const aborted = aborting || (lastMessage?.role === "assistant" && lastMessage.stopReason === "aborted");
+			if (aborted) {
+				promptError = undefined;
+				sendJson(response, 200, { ok: true, aborted: true });
+			} else {
+				promptError = error instanceof Error ? error.message : String(error);
+				sendJson(response, 500, { error: promptError });
+			}
+		} finally {
+			activePrompt = undefined;
+			sequence += 1;
+			broadcastSnapshot();
+			void refreshGitStatus();
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/abort" && request.method === "POST") {
+		if (sessionOperation && session) {
+			sendJson(response, 409, { error: "A session transition is already running" });
+			return;
+		}
+		if (!session || (!activePrompt && !session.isStreaming)) {
+			sendJson(response, 200, { ok: true });
+			return;
+		}
+		aborting = true;
+		sequence += 1;
+		broadcastSnapshot();
+		try {
+			await session.abort();
+			sendJson(response, 200, { ok: true });
+		} catch (error) {
+			sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+		} finally {
+			aborting = false;
+			sequence += 1;
+			broadcastSnapshot();
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/session/select" && request.method === "POST") {
+		if (sessionOperation) {
+			sendJson(response, 409, { error: "A session transition is already running" });
+			return;
+		}
+		if (activePrompt || session?.isStreaming || aborting) {
+			sendJson(response, 409, { error: "Cannot switch sessions while a prompt is running" });
+			return;
+		}
+		let body: Record<string, unknown>;
+		try {
+			body = await readBody(request);
+		} catch (error) {
+			const status = error instanceof HttpRequestError ? error.status : 400;
+			sendJson(response, status, { error: error instanceof Error ? error.message : String(error) });
+			return;
+		}
+		if (typeof body.id !== "string" || !body.id) {
+			sendJson(response, 400, { error: "id is required" });
+			return;
+		}
+		if (session?.sessionId === body.id) {
+			sendJson(response, 200, { ok: true });
+			return;
+		}
+		let selected = sessionCatalog.get(body.id);
+		if (!selected) {
+			try {
+				await listSessions();
+			} catch (error) {
+				sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
+				return;
+			}
+			selected = sessionCatalog.get(body.id);
+		}
+		if (!selected) {
+			sendJson(response, 404, { error: "Session not found" });
+			return;
+		}
+		try {
+			await startSessionOpen({ path: selected.path });
+			sendJson(response, 200, { ok: true });
+		} catch (error) {
+			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/session/model" && request.method === "POST") {
+		if (sessionOperation || activePrompt || session?.isStreaming || aborting) {
+			sendJson(response, 409, { error: "Cannot change model while the session is busy" });
+			return;
+		}
+		if (!session) {
+			sendJson(response, 503, { error: "No active session" });
+			return;
+		}
+		let body: Record<string, unknown>;
+		try {
+			body = await readBody(request);
+		} catch (error) {
+			const status = error instanceof HttpRequestError ? error.status : 400;
+			sendJson(response, status, { error: error instanceof Error ? error.message : String(error) });
+			return;
+		}
+		if (typeof body.provider !== "string" || typeof body.id !== "string") {
+			sendJson(response, 400, { error: "provider and id are required" });
+			return;
+		}
+		const model = session.modelRuntime
+			.getAvailableSnapshot()
+			.find((candidate) => candidate.provider === body.provider && candidate.id === body.id);
+		if (!model) {
+			sendJson(response, 404, { error: "Model is not available" });
+			return;
+		}
+		try {
+			await session.setModel(model);
+			sequence += 1;
+			broadcastSnapshot();
+			sendJson(response, 200, { ok: true });
+		} catch (error) {
+			sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/session/thinking" && request.method === "POST") {
+		if (sessionOperation || activePrompt || session?.isStreaming || aborting) {
+			sendJson(response, 409, { error: "Cannot change thinking level while the session is busy" });
+			return;
+		}
+		if (!session) {
+			sendJson(response, 503, { error: "No active session" });
+			return;
+		}
+		let body: Record<string, unknown>;
+		try {
+			body = await readBody(request);
+		} catch (error) {
+			const status = error instanceof HttpRequestError ? error.status : 400;
+			sendJson(response, status, { error: error instanceof Error ? error.message : String(error) });
+			return;
+		}
+		if (typeof body.level !== "string") {
+			sendJson(response, 400, { error: "level is required" });
+			return;
+		}
+		const level = session.getAvailableThinkingLevels().find((candidate) => candidate === body.level);
+		if (!level) {
+			sendJson(response, 400, { error: "Thinking level is not supported by the current model" });
+			return;
+		}
+		try {
+			session.setThinkingLevel(level);
+			sequence += 1;
+			broadcastSnapshot();
+			sendJson(response, 200, { ok: true });
+		} catch (error) {
+			sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/session/name" && request.method === "POST") {
+		if (sessionOperation) {
+			sendJson(response, 409, { error: "A session transition is already running" });
+			return;
+		}
+		if (!session) {
+			sendJson(response, 503, { error: "No active session" });
+			return;
+		}
+		let body: Record<string, unknown>;
+		try {
+			body = await readBody(request);
+		} catch (error) {
+			const status = error instanceof HttpRequestError ? error.status : 400;
+			sendJson(response, status, { error: error instanceof Error ? error.message : String(error) });
+			return;
+		}
+		if (typeof body.name !== "string") {
+			sendJson(response, 400, { error: "name is required" });
+			return;
+		}
+		const name = body.name.trim();
+		if (name.length > 120) {
+			sendJson(response, 400, { error: "name must be 120 characters or fewer" });
+			return;
+		}
+		try {
+			session.setSessionName(name);
+			sendJson(response, 200, { ok: true });
+		} catch (error) {
+			sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/new" && request.method === "POST") {
+		if (sessionOperation) {
+			sendJson(response, 409, { error: "A session transition is already running" });
+			return;
+		}
+		if (activePrompt || session?.isStreaming || aborting) {
+			sendJson(response, 409, { error: "Cannot replace a running session" });
+			return;
+		}
+		try {
+			await startSessionOpen("new");
+			sendJson(response, 200, { ok: true });
+		} catch (error) {
+			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
+		}
+		return;
+	}
+
+	if (request.method === "GET" || request.method === "HEAD") {
+		await serveFrontend(request, response, url);
+		return;
+	}
+
+	sendJson(response, 404, { error: "Not found" });
+}
+
+function resolveListenPort(value: number): number {
+	if (!Number.isInteger(value) || value < 0 || value > 65_535) {
+		throw new Error(`port must be an integer between 0 and 65535, received ${value}`);
+	}
+	return value;
+}
+
+function configureRuntime(options: WebServerOptions): void {
+	port = resolveListenPort(options.port ?? configuredPort);
+	cwd = options.cwd ?? configuredCwd;
+	isDevelopment = options.mode ? options.mode === "development" : process.env.PI_WEB_MODE !== "production";
+	sessionFactory = options.sessionFactory;
+	sessionLister = options.sessionLister;
+	session = undefined;
+	sessionError = undefined;
+	promptError = undefined;
+	activePrompt = undefined;
+	aborting = false;
+	sessionOperation = undefined;
+	sequence = 0;
+	gitRefreshId += 1;
+	gitState = { state: "loading", files: [] };
+	activeToolExecutions.clear();
+	sessionCatalog.clear();
+	for (const subscriber of subscribers) removeSubscriber(subscriber, true);
+}
+
+async function closeServer(httpServer: Server): Promise<void> {
+	gitRefreshId += 1;
+	for (const subscriber of subscribers) removeSubscriber(subscriber, true);
+	const pendingOperation = sessionOperation;
+	sessionOperation = undefined;
+	if (pendingOperation) {
+		try {
+			await pendingOperation;
+		} catch {
+			// The initialization error is already exposed through the session snapshot.
+		}
+	}
+	const currentSession = session;
+	session = undefined;
+	if (currentSession) await currentSession.dispose();
+	if (vite) {
+		await vite.close();
+		vite = undefined;
+	}
+	await new Promise<void>((resolveClose, rejectClose) => {
+		if (!httpServer.listening) {
+			resolveClose();
+			return;
+		}
+		httpServer.close((error) => {
+			if (error && (error as NodeJS.ErrnoException).code !== "ERR_SERVER_NOT_RUNNING") rejectClose(error);
+			else resolveClose();
+		});
+	});
+}
+
+export async function startWebServer(options: WebServerOptions = {}): Promise<WebServerHandle> {
+	configureRuntime(options);
+	await validateWorkingDirectory();
+	if (isDevelopment) {
+		vite = await createViteServer({
+			root: webRoot,
+			server: { middlewareMode: true },
+			appType: "spa",
+		});
+	}
+
+	const httpServer = createServer((request, response) => {
+		void handle(request, response).catch((error: unknown) => {
+			if (!response.headersSent)
+				sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+			else response.destroy();
+		});
+	});
+
+	await new Promise<void>((resolveListen, rejectListen) => {
+		httpServer.once("error", rejectListen);
+		httpServer.listen(port, "127.0.0.1", () => {
+			httpServer.off("error", rejectListen);
+			const address = httpServer.address();
+			if (address && typeof address !== "string") port = (address as AddressInfo).port;
+			resolveListen();
+		});
+	});
+
+	void refreshGitStatus();
+	void startSessionOpen("recent").catch((error: unknown) => {
+		console.error(`Agent session unavailable: ${error instanceof Error ? error.message : String(error)}`);
+	});
+
+	return {
+		server: httpServer,
+		port,
+		close: () => closeServer(httpServer),
+	};
+}
+
+async function main(): Promise<void> {
+	const handle = await startWebServer();
+	console.log(`Orrery Web UI: http://127.0.0.1:${handle.port}`);
+	console.log(`Working directory: ${cwd}`);
+	let closing = false;
+	const shutdown = () => {
+		if (closing) return;
+		closing = true;
+		void handle.close();
+	};
+	process.once("SIGINT", shutdown);
+	process.once("SIGTERM", shutdown);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+	void main().catch((error: unknown) => {
+		console.error(error instanceof Error ? error.message : String(error));
+		process.exitCode = 1;
+	});
+}

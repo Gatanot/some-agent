@@ -104,7 +104,12 @@
 										<figure class="message-image"><img src={`data:${block.mimeType};base64,${block.data}`} alt="对话图片" loading="lazy" /></figure>
 									{/if}
 								{/each}
-								{#if message.error}<div class="error-block">{message.error}</div>{/if}
+								{#if message.error}
+									<div class="error-block">
+										<div>{message.error}</div>
+										{#if message.errorAction}<div class="error-actions"><button class="error-retry" type="button" on:click={() => onNoticeAction(message.errorAction)}>重试任务</button></div>{/if}
+									</div>
+								{/if}
 							</div>
 						{/if}
 					</article>

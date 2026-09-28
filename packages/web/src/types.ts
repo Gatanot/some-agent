@@ -44,6 +44,7 @@ export interface Message {
 	blocks?: Block[];
 	tools?: Tool[];
 	error?: string;
+	errorAction?: "retry";
 }
 
 export interface Notice {

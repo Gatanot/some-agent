@@ -174,7 +174,7 @@
 					{#if state.phase === "running" && !draft.trim()}
 						<button class="secondary-button composer-button send-button" type="button" aria-label="Stop" title="Stop" on:click={onStop}><CircleStop size={16} /></button>
 					{:else}
-						<button class="primary-button composer-button send-button" type="button" aria-label="Send" title="Send" disabled={state.unavailable || state.connection !== "connected" || state.noModel || !draft.trim()} on:click={onSend}><ArrowUp size={17} /></button>
+						<button class="primary-button composer-button send-button" type="button" aria-label={state.phase === "running" ? "Steer" : "Send"} title={state.phase === "running" ? "Steer (Ctrl+Enter)" : "Send (Ctrl+Enter)"} disabled={state.unavailable || state.connection !== "connected" || state.noModel || !draft.trim()} on:click={onSend}><ArrowUp size={17} /></button>
 					{/if}
 				</div>
 			</div>

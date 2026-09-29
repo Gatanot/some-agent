@@ -276,6 +276,21 @@
 		}
 	}
 
+	async function deleteSession(id: string): Promise<void> {
+		if (state.phase === "running" || state.phase === "stopping" || id === state.sessionId) return;
+		const summary = sessionSummaries.find((session) => session.id === id);
+		const title = summary?.name ?? summary?.firstMessage ?? "this session";
+		if (!window.confirm(`Delete session “${title}”? This also removes its usage history from project totals.`)) return;
+		try {
+			await postJson("/api/session/delete", { id });
+			await loadSessions();
+			sessionMatches = sessionMatches.filter((match) => match.id !== id);
+			if (inspectorTab === "usage") usageRefreshToken += 1;
+		} catch (error) {
+			logNotice(error instanceof Error ? error.message : String(error));
+		}
+	}
+
 	async function selectSession(id: string): Promise<void> {
 		if (state.phase === "running" || state.phase === "stopping") {
 			logNotice("Wait for the current task before switching sessions");
@@ -302,9 +317,9 @@
 		}
 	}
 
-	async function sendLivePrompt(text: string, submittedSessionId: string | undefined): Promise<void> {
+	async function sendLivePrompt(text: string, submittedSessionId: string | undefined, streamingBehavior?: "steer"): Promise<void> {
 		try {
-			await postJson("/api/prompt", { text });
+			await postJson("/api/prompt", streamingBehavior ? { text, streamingBehavior } : { text });
 		} catch (error) {
 			if (submittedSessionId) {
 				draftBySession = new Map(draftBySession).set(submittedSessionId, text);
@@ -316,9 +331,9 @@
 
 	function startPrompt(): void {
 		const text = draftValue.trim();
-		if (!text || !serverSnapshot?.ready || state.unavailable || state.noModel || state.connection !== "connected") return;
+		if (!text || !serverSnapshot?.ready || state.unavailable || state.noModel || state.connection !== "connected" || serverSnapshot.phase === "stopping") return;
 		updateDraft("");
-		void sendLivePrompt(text, draftSessionId);
+		void sendLivePrompt(text, draftSessionId, state.phase === "running" ? "steer" : undefined);
 	}
 
 	async function stopPrompt(): Promise<void> {
@@ -414,6 +429,7 @@
 			matches={sessionMatches}
 			searching={sessionSearching}
 			onSessionSelect={selectSession}
+			onDeleteSession={deleteSession}
 			onSearch={searchSessions}
 			onNewSession={newSession}
 			newSessionDisabled={state.phase === "running" || state.phase === "stopping"}

@@ -1,9 +1,9 @@
-import { readFile, stat } from "node:fs/promises";
+import { readFile, stat, unlink } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { extname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { AgentSession, AgentSessionEvent, SessionInfo, SettingsManager } from "@gatanot/orrery";
+import type { AgentSession, AgentSessionEvent, SessionEntry, SessionInfo, SettingsManager } from "@gatanot/orrery";
 import { createAgentSession, SessionManager } from "@gatanot/orrery";
 import { createServer as createViteServer, type ViteDevServer } from "vite";
 import { contextBreakdown } from "./context.ts";
@@ -98,6 +98,8 @@ let gitState: WebGitState = { state: "loading", files: [] };
 const activeToolExecutions = new Map<string, WebToolExecution>();
 const sessionCatalog = new Map<string, SessionInfo>();
 const usageCache = new Map<string, { modified: number; since: number; summary: UsageSummary }>();
+/** Usage entries retained by session ID after a session file is deleted. */
+const deletedSessionUsage = new Map<string, SessionEntry[]>();
 const subscribers = new Set<SseSubscriber>();
 
 function parsePort(value: string): number {
@@ -353,15 +355,19 @@ async function projectUsage(days: number): Promise<WebUsage> {
 	const models = new Map<string, WebUsageModel>();
 	const daily = new Map<string, WebUsageDay>();
 
+	const summaries: UsageSummary[] = [];
 	for (const info of sessions) {
 		if (info.modified.getTime() < since) continue;
-		let summary: UsageSummary;
 		try {
-			summary = await sessionUsage(info.path, info.modified.getTime(), since);
+			summaries.push(await sessionUsage(info.path, info.modified.getTime(), since));
 		} catch {
 			// A single unreadable session should not fail the whole report.
-			continue;
 		}
+	}
+	for (const entries of deletedSessionUsage.values()) {
+		summaries.push(summarizeUsage(entries, since));
+	}
+	for (const summary of summaries) {
 		for (const model of summary.models) {
 			const merged = models.get(model.key) ?? { key: model.key, tokens: 0, cost: 0 };
 			merged.tokens += model.tokens;
@@ -943,6 +949,10 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			sendJson(response, 400, { error: "text is required" });
 			return;
 		}
+		if (body.streamingBehavior !== undefined && body.streamingBehavior !== "steer") {
+			sendJson(response, 400, { error: "streamingBehavior must be steer" });
+			return;
+		}
 		if (sessionOperation && session) {
 			sendJson(response, 409, { error: "A session transition is already running" });
 			return;
@@ -959,9 +969,9 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 				sendJson(response, 409, { error: "Stopping the current task" });
 				return;
 			}
-			// Queue the message after the running turn instead of rejecting it (pi's follow-up semantics).
+			// A Web Ctrl+Enter submission during output is a steering message.
 			try {
-				await activeSession.prompt(body.text, { streamingBehavior: "followUp" });
+				await activeSession.prompt(body.text, { streamingBehavior: "steer" });
 				sendJson(response, 200, { ok: true, queued: true });
 			} catch (error) {
 				sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
@@ -1020,6 +1030,47 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			aborting = false;
 			sequence += 1;
 			broadcastSnapshot();
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/session/delete" && request.method === "POST") {
+		if (sessionOperation || activePrompt || session?.isStreaming || aborting) {
+			sendJson(response, 409, { error: "Cannot delete a session while the agent is busy" });
+			return;
+		}
+		let body: Record<string, unknown>;
+		try {
+			body = await readBody(request);
+		} catch (error) {
+			const status = error instanceof HttpRequestError ? error.status : 400;
+			sendJson(response, status, { error: error instanceof Error ? error.message : String(error) });
+			return;
+		}
+		if (typeof body.id !== "string" || !body.id) {
+			sendJson(response, 400, { error: "id is required" });
+			return;
+		}
+		if (session?.sessionId === body.id) {
+			sendJson(response, 409, { error: "Cannot delete the current session" });
+			return;
+		}
+		const selected = sessionCatalog.get(body.id);
+		if (!selected) {
+			sendJson(response, 404, { error: "Session not found" });
+			return;
+		}
+		try {
+			const entries = SessionManager.open(selected.path).getEntries();
+			await unlink(selected.path);
+			deletedSessionUsage.set(body.id, entries);
+			usageCache.delete(selected.path);
+			sessionCatalog.delete(body.id);
+			sequence += 1;
+			broadcastSnapshot();
+			sendJson(response, 200, { ok: true });
+		} catch (error) {
+			sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
 		}
 		return;
 	}
@@ -1240,6 +1291,7 @@ function configureRuntime(options: WebServerOptions): void {
 	gitState = { state: "loading", files: [] };
 	activeToolExecutions.clear();
 	sessionCatalog.clear();
+	deletedSessionUsage.clear();
 	for (const subscriber of subscribers) removeSubscriber(subscriber, true);
 }
 

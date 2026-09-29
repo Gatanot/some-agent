@@ -22,7 +22,6 @@
 import { execSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { findPackageDirectories } from "./package-workspaces.mjs";
 import { getPublicWorkspacePackages, getReleaseWorkspacePackages } from "./release-packages.mjs";
 
 const RELEASE_TARGET = process.argv[2];
@@ -48,7 +47,7 @@ function run(cmd, options = {}) {
 }
 
 function getVersion() {
-	const pkg = JSON.parse(readFileSync("packages/ai/package.json", "utf-8"));
+	const pkg = JSON.parse(readFileSync("packages/coding-agent/package.json", "utf-8"));
 	return pkg.version;
 }
 
@@ -168,8 +167,8 @@ function bumpOrSetVersion(target) {
 }
 
 function getChangelogs() {
-	return findPackageDirectories()
-		.map((directory) => join(directory, "CHANGELOG.md"))
+	return getReleaseWorkspacePackages()
+		.map(({ directory }) => join(directory, "CHANGELOG.md"))
 		.filter((path) => existsSync(path));
 }
 

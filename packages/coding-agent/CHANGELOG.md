@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Changed the Web UI inspector to show project usage by default.
+
+### Fixed
+
+- Fixed global installs missing the runtime pi packages required by `orrery web` and other commands.
+
 ## [0.2.1] - 2026-09-29
 
 ### Added

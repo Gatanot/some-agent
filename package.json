@@ -31,6 +31,7 @@
 		"profile:tui": "node scripts/profile-coding-agent-node.mjs --mode tui",
 		"profile:rpc": "node scripts/profile-coding-agent-node.mjs --mode rpc",
 		"web": "npm --prefix packages/web start",
+		"build:web": "npm --prefix packages/coding-agent run build:web",
 		"test": "npm run test:scripts && npm run test --workspaces --if-present",
 		"test:scripts": "node --test scripts/*.test.mjs",
 		"version:patch": "npm version patch --workspaces --no-git-tag-version --no-workspaces-update && node scripts/sync-versions.js && npm install --package-lock-only --ignore-scripts",

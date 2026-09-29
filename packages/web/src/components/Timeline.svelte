@@ -55,6 +55,12 @@
 </script>
 
 <div class="timeline-wrap">
+	{#if state.phase === "compacting"}
+		<div class="compaction-banner" role="status" aria-live="polite">
+			<span class="compaction-spinner" aria-hidden="true"></span>
+			<span><strong>Compacting conversation</strong> · summarizing older messages to make room for more context.</span>
+		</div>
+	{/if}
 	{#if state.connection === "disconnected"}
 		<div class="connection-banner">
 			<span><strong>Connection lost</strong> · the agent state is preserved and resyncs after reconnecting.</span>

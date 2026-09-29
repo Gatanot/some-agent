@@ -1,11 +1,12 @@
 import { readFile, stat, unlink } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
+import { createRequire } from "node:module";
 import type { AddressInfo } from "node:net";
 import { extname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { AgentSession, AgentSessionEvent, SessionEntry, SessionInfo, SettingsManager } from "@gatanot/orrery";
 import { createAgentSession, SessionManager } from "@gatanot/orrery";
-import { createServer as createViteServer, type ViteDevServer } from "vite";
+import type { ViteDevServer } from "vite";
 import { contextBreakdown } from "./context.ts";
 import { parseFileLimit, searchProjectFiles } from "./files.ts";
 import { readGitDiff, readGitStatus } from "./git.ts";
@@ -28,10 +29,17 @@ import type {
 } from "./protocol.ts";
 import { localDateKey, summarizeUsage, type UsageSummary } from "./usage.ts";
 
+const require = createRequire(import.meta.url);
+type ViteCreateServer = (options: {
+	root: string;
+	server: { middlewareMode: true };
+	appType: "spa";
+}) => Promise<ViteDevServer>;
+
 const configuredPort = parsePort(process.env.PI_WEB_PORT ?? "3210");
-const configuredCwd = process.env.PI_WEB_CWD ?? resolve(import.meta.dirname, "../../..");
+const configuredCwd = process.env.PI_WEB_CWD ?? process.cwd();
 const webRoot = resolve(import.meta.dirname, "..");
-const distRoot = join(webRoot, "dist");
+const distRoot = process.env.PI_WEB_ASSETS ? resolve(process.env.PI_WEB_ASSETS) : join(webRoot, "dist");
 const pagePath = join(distRoot, "index.html");
 
 let port = configuredPort;
@@ -90,6 +98,7 @@ let sessionError: string | undefined;
 let promptError: string | undefined;
 let activePrompt: { session: AgentSession } | undefined;
 let aborting = false;
+let compacting = false;
 let sessionOperation: Promise<void> | undefined;
 let vite: ViteDevServer | undefined;
 let sequence = 0;
@@ -442,11 +451,13 @@ function sessionDelta(): WebSnapshotDelta {
 		? "unavailable"
 		: aborting
 			? "stopping"
-			: streaming
-				? "streaming"
-				: error
-					? "error"
-					: "idle";
+			: compacting
+				? "compacting"
+				: streaming
+					? "streaming"
+					: error
+						? "error"
+						: "idle";
 	return {
 		protocolVersion: 1,
 		sequence,
@@ -639,6 +650,8 @@ function updateToolExecution(event: AgentSessionEvent): void {
 function subscribeToSession(nextSession: AgentSession): void {
 	nextSession.subscribe((event) => {
 		if (event.type === "bash_execution_update") return;
+		if (event.type === "compaction_start") compacting = true;
+		else if (event.type === "compaction_end") compacting = false;
 		updateToolExecution(event);
 		sequence += 1;
 		broadcastUpdate(event.type);
@@ -661,6 +674,7 @@ async function openSession(selection: SessionSelection): Promise<void> {
 		sessionError = undefined;
 		promptError = undefined;
 		aborting = false;
+		compacting = false;
 		activeToolExecutions.clear();
 		subscribeToSession(session);
 		if (previous) previous.dispose();
@@ -1330,6 +1344,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
 	configureRuntime(options);
 	await validateWorkingDirectory();
 	if (isDevelopment) {
+		const { createServer: createViteServer } = require("vite") as { createServer: ViteCreateServer };
 		vite = await createViteServer({
 			root: webRoot,
 			server: { middlewareMode: true },

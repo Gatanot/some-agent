@@ -162,6 +162,7 @@ button:disabled { cursor: default; opacity: .48; }
 .session-facts { flex-wrap: wrap; gap: 8px 14px; margin-top: 7px; color: var(--text-subtle); font-size: 11px; }
 .run-status { display: inline-flex; align-items: center; gap: 7px; color: var(--success); }
 .run-status.running { color: var(--accent); }
+.run-status.compacting { color: var(--accent); }
 .run-status.error { color: var(--danger); }
 .run-status.disconnected { color: var(--warning); }
 .session-id { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
@@ -372,6 +373,10 @@ select:disabled { opacity: .65; }
 .settings-note { margin: 0 0 6px; color: var(--text-subtle); font-size: 11px; }
 .settings-error { margin: 12px 0 0; padding: 9px 11px; border: 1px solid var(--danger-line); border-radius: 5px; background: var(--danger-bg); color: var(--danger); font-size: 12px; }
 .settings-placeholder { padding: 42px 0; color: var(--text-subtle); text-align: center; }
+.compaction-banner { position: sticky; top: 10px; z-index: 2; display: flex; align-items: center; gap: 9px; margin: 0 auto 12px; width: min(760px, 100%); padding: 10px 13px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--text-subtle); font-size: 12px; }
+.compaction-banner strong { color: var(--text); }
+.compaction-spinner { width: 12px; height: 12px; flex: 0 0 12px; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .connection-banner { position: absolute; z-index: 3; top: 12px; right: 18px; left: 18px; display: flex; min-height: 38px; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 9px 7px 13px; border: 1px solid var(--warning-line); border-radius: 5px; background: var(--warning-bg); box-shadow: 0 8px 24px var(--shadow); color: var(--warning); font-size: 12px; }
 .connection-banner strong { color: var(--text); }
 .drawer-backdrop, .inspector-backdrop { display: none; }

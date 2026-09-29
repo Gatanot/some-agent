@@ -4,13 +4,20 @@ Orrery Web is the local Svelte + Vite workbench UI. It connects to the current l
 
 ## Run
 
-From the repository root:
+From the repository root during development:
 
 ```bash
 npm run web
 ```
 
-Open `http://127.0.0.1:3210`. The development server uses Vite middleware for the Svelte UI and keeps the agent API on the same loopback port.
+For the installed Orrery CLI:
+
+```bash
+orrery web
+orrery web --port 3210 --cwd /path/to/project
+```
+
+Open `http://127.0.0.1:3210`. The development server uses Vite middleware for the Svelte UI and keeps the agent API on the same loopback port. The published `orrery web` command serves the bundled production assets.
 
 Useful environment variables:
 

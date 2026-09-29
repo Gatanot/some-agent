@@ -1,4 +1,4 @@
-export type WebSessionPhase = "unavailable" | "idle" | "streaming" | "stopping" | "error";
+export type WebSessionPhase = "unavailable" | "idle" | "streaming" | "compacting" | "stopping" | "error";
 
 export interface WebToolExecution {
 	toolCallId: string;

@@ -95,7 +95,7 @@ describe("getSupportedThinkingLevels", () => {
 	});
 
 	it("includes only high plus off for OpenCode Go Kimi K2.6", () => {
-		const model = getModel("opencode-go", "kimi-k2.6");
+		const model = getModel("opencode-go", "kimi-k2.7-code");
 		expect(model).toBeDefined();
 		expect(getSupportedThinkingLevels(model!)).toEqual(["off", "high"]);
 	});

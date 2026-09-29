@@ -145,6 +145,13 @@ function isWSL(env: NodeJS.ProcessEnv = process.env): boolean {
 		return true;
 	}
 
+	// An explicit env override is authoritative. The /proc/version probe is a
+	// host-level heuristic that cannot be represented in an env object, so tests
+	// simulating a plain Linux session must not inherit the host's WSL status.
+	if (env !== process.env) {
+		return false;
+	}
+
 	try {
 		const release = readFileSync("/proc/version", "utf-8");
 		return /microsoft|wsl/i.test(release);

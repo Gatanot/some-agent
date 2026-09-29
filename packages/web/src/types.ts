@@ -1,7 +1,7 @@
 export type LayoutName = "sidebar" | "drawer";
 export type ToolStatus = "done" | "running" | "error";
 export type NoticeKind = "empty" | "history" | "error" | "warning";
-export type PhaseTone = "idle" | "running" | "error" | "disconnected";
+export type PhaseTone = "idle" | "running" | "compacting" | "error" | "disconnected";
 
 export interface DiffLine {
 	kind: "add" | "remove" | "context";

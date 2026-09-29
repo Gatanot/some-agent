@@ -155,7 +155,7 @@
 			<textarea bind:this={textareaElement} aria-label="Task input" value={draft} placeholder="" on:input={handleInput} on:keydown={handleKeydown} on:blur={handleBlur}></textarea>
 			<div class="composer-controls">
 				<div class="composer-selects">
-					<select aria-label="Model" title={selectedModel?.name ?? "Model"} style={`width: ${modelSelectWidth}`} value={state.modelKey} disabled={state.models.length === 0 || state.phase === "running" || state.phase === "stopping"} on:change={(event) => onModelChange(event.currentTarget.value)}>
+					<select aria-label="Model" title={selectedModel?.name ?? "Model"} style={`width: ${modelSelectWidth}`} value={state.modelKey} disabled={state.models.length === 0 || state.phase === "running" || state.phase === "compacting" || state.phase === "stopping"} on:change={(event) => onModelChange(event.currentTarget.value)}>
 						{#if state.models.length === 0}<option value="">No models available</option>{/if}
 						{#each modelGroups as group (group.provider)}
 							<optgroup label={group.provider}>
@@ -165,7 +165,7 @@
 							</optgroup>
 						{/each}
 					</select>
-					<select aria-label="Thinking level" title="Thinking level" value={state.thinkingLevel} disabled={state.noModel || state.phase === "running" || state.phase === "stopping" || state.thinkingLevels.length < 2} on:change={(event) => onThinkingChange(event.currentTarget.value)}>
+					<select aria-label="Thinking level" title="Thinking level" value={state.thinkingLevel} disabled={state.noModel || state.phase === "running" || state.phase === "compacting" || state.phase === "stopping" || state.thinkingLevels.length < 2} on:change={(event) => onThinkingChange(event.currentTarget.value)}>
 						{#each state.thinkingLevels as level (level)}<option value={level}>{level}</option>{/each}
 					</select>
 				</div>
@@ -174,7 +174,7 @@
 					{#if state.phase === "running" && !draft.trim()}
 						<button class="secondary-button composer-button send-button" type="button" aria-label="Stop" title="Stop" on:click={onStop}><CircleStop size={16} /></button>
 					{:else}
-						<button class="primary-button composer-button send-button" type="button" aria-label={state.phase === "running" ? "Steer" : "Send"} title={state.phase === "running" ? "Steer (Ctrl+Enter)" : "Send (Ctrl+Enter)"} disabled={state.unavailable || state.connection !== "connected" || state.noModel || !draft.trim()} on:click={onSend}><ArrowUp size={17} /></button>
+						<button class="primary-button composer-button send-button" type="button" aria-label={state.phase === "running" || state.phase === "compacting" ? "Steer" : "Send"} title={state.phase === "running" || state.phase === "compacting" ? "Steer (Ctrl+Enter)" : "Send (Ctrl+Enter)"} disabled={state.unavailable || state.connection !== "connected" || state.noModel || !draft.trim()} on:click={onSend}><ArrowUp size={17} /></button>
 					{/if}
 				</div>
 			</div>

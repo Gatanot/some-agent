@@ -402,6 +402,7 @@ export function snapshotToAppState(
 		snapshot.model !== undefined &&
 		snapshot.models.some((model) => model.provider === snapshot.model?.provider && model.id === snapshot.model?.id);
 	const running = snapshot.phase === "streaming" || snapshot.phase === "stopping";
+	const compacting = snapshot.phase === "compacting";
 	const hasError = snapshot.phase === "error" || Boolean(snapshot.error);
 	const messages = mapMessages(snapshot);
 	const errorShownInline = messages.some((message) => message.error === snapshot.error);
@@ -409,16 +410,18 @@ export function snapshotToAppState(
 		title: sessionTitle(snapshot),
 		subtitle: snapshot.cwd,
 		sessionId: snapshot.sessionId ?? "",
-		phase: running ? "running" : snapshot.phase === "error" ? "error" : "idle",
+		phase: compacting ? "compacting" : running ? "running" : snapshot.phase === "error" ? "error" : "idle",
 		phaseLabel:
-			snapshot.phase === "streaming"
-				? "Working"
-				: snapshot.phase === "stopping"
-					? "Stopping"
-					: hasError
-						? "Error"
-						: "Idle",
-		phaseTone: running ? "running" : hasError ? "error" : "idle",
+			snapshot.phase === "compacting"
+				? "Compacting"
+				: snapshot.phase === "streaming"
+					? "Working"
+					: snapshot.phase === "stopping"
+						? "Stopping"
+						: hasError
+							? "Error"
+							: "Idle",
+		phaseTone: compacting ? "compacting" : running ? "running" : hasError ? "error" : "idle",
 		connection,
 		model: modelText(snapshot),
 		modelKey: snapshot.model ? JSON.stringify([snapshot.model.provider, snapshot.model.id]) : "",

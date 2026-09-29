@@ -16,7 +16,7 @@
 | 4 | P2：审阅体验 | P1 可日常使用 | diff、上下文输入、分支及扩展交互 |
 | 5 | P3：体验扩展 | 实际使用反馈确认价值 | 按需选取的增强功能 |
 
-当前 P0 已完成、P1 主要交付已完成，准备进入 P2。页面已采用左侧导航 rail、真实 session 列表、中央时间线和右侧 Changes/Terminal/项目用量 检查栏；服务端提供命名、模型选择、thinking level 和流式 steer 排队接口。faux provider HTTP/SSE 集成及 Chromium 桌面/窄屏流程已验证。
+当前 P0 已完成、P1 主要交付已完成，准备进入 P2。页面已采用左侧导航 rail、真实 session 列表、中央时间线和右侧 Changes/Terminal/项目用量 检查栏；服务端提供命名、模型选择、thinking level 和流式 follow-up 排队接口。faux provider HTTP/SSE 集成及 Chromium 桌面/窄屏流程已验证。
 
 ## 2. 当前实现与缺口
 
@@ -27,7 +27,7 @@
 | 本地启动 | Node HTTP 服务，仅绑定 loopback；开发模式由 Vite middleware 提供页面 | 完善启动失败、退出和生产静态资源说明 |
 | Agent 接入 | 服务端创建并复用当前 SDK session；页面接收版本化 SSE 快照和 agent 事件 | faux provider HTTP/SSE 覆盖流式思考/文本、工具 partial/error、取消、重连和 session transition；Chromium 中验证 prompt 和快照渲染 |
 | 会话 | 侧栏通过 `/api/sessions` 显示真实历史 session，`/api/sessions/search` 按标题与 `allMessagesText` 全量检索并返回片段；选择恢复、新建调用真实服务端；运行中禁止切换；命名走 `/api/session/name`；草稿按 session id 隔离 | 补分支和更细的恢复错误反馈 |
-| 提交与取消 | `/api/prompt`、`/api/abort` 已接入真实 session；流式进行中提交按 steer 排队，草稿保留 | 补浏览器流程和跨标签页验收 |
+| 提交与取消 | `/api/prompt`、`/api/abort` 已接入真实 session；流式进行中提交按 follow-up 排队，草稿保留 | 补浏览器流程和跨标签页验收 |
 | 更新传输 | 首帧/重连发送完整快照；流式事件只发增量字段，队列积压时合并为单帧快照 | 已完成；后续按需评估 WebSocket |
 | 消息展示 | Svelte 时间线使用安全 Markdown、代码语法高亮、diff 呈现、代码复制和 thinking 折叠；工具卡片展开状态持久化；工具结果中的 image part 渲染为图片 | 已完成；后续按需补更多专用工具呈现 |
 | 页面状态 | 已接入真实初始化、运行中、停止中、错误、重连和无模型状态；模型与 thinking 选项来自当前 `ModelRuntime`；无快照时只显示连接状态 | 完善无模型配置入口和压缩状态 |

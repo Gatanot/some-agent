@@ -23,6 +23,8 @@ const allowedExternalPackages = new Set([
 	"utf-8-validate",
 	// Optional debug output coloring.
 	"supports-color",
+	// Used only by the AI package's image fixture generator, never by the CLI runtime.
+	"canvas",
 ]);
 
 const lazyJitiPlugin = {
@@ -79,7 +81,7 @@ function commonBuildOptions() {
 		banner,
 		bundle: true,
 		define: { PI_BUNDLED_NODE: "true" },
-		external: ["@silvia-odwyer/photon-node"],
+		external: ["@silvia-odwyer/photon-node", "canvas"],
 		format: "esm",
 		legalComments: "none",
 		logLevel: "warning",

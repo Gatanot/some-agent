@@ -983,9 +983,12 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 				sendJson(response, 409, { error: "Stopping the current task" });
 				return;
 			}
-			// A Web Ctrl+Enter submission during output is a steering message.
+			// A submission during output waits for the current turn unless the client
+			// explicitly asks to steer.
 			try {
-				await activeSession.prompt(body.text, { streamingBehavior: "steer" });
+				await activeSession.prompt(body.text, {
+					streamingBehavior: body.streamingBehavior === "steer" ? "steer" : "followUp",
+				});
 				sendJson(response, 200, { ok: true, queued: true });
 			} catch (error) {
 				sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });

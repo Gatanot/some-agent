@@ -763,6 +763,9 @@ test("queues a prompt while the agent is streaming instead of rejecting it", asy
 		assert.deepEqual(afterSnapshot.queuedMessages?.followUp, []);
 		assert.match(JSON.stringify(afterSnapshot.messages), /queued reply/);
 	} finally {
+		// Release a still-pending first response so the server can finish the turn
+		// and close the held-open request instead of waiting for the fetch timeout.
+		releaseFirst?.(fauxAssistantMessage("cleanup"));
 		await events.reader.cancel();
 		await fixture.close();
 	}

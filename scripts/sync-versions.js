@@ -8,6 +8,7 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { findPackageDirectories } from "./package-workspaces.mjs";
+import { isReleasePackage } from "./release-packages.mjs";
 
 const GENERATED_PACKAGE_SUFFIXES = [join("coding-agent", "install-lock")];
 
@@ -18,7 +19,7 @@ const workspacePackages = findPackageDirectories(packageRoot)
 		const path = join(directory, "package.json");
 		return { data: JSON.parse(readFileSync(path, "utf8")), path };
 	});
-const publishedPackages = workspacePackages.filter((pkg) => pkg.data.private !== true);
+const publishedPackages = workspacePackages.filter((pkg) => pkg.data.private !== true && isReleasePackage(pkg.data.name));
 const versionMap = new Map(workspacePackages.map((pkg) => [pkg.data.name, pkg.data.version]));
 
 console.log("Current versions:");
@@ -51,7 +52,10 @@ for (const pkg of workspacePackages) {
 			// Registry aliases such as `npm:@earendil-works/pi-ai@0.1.2` are never workspace-linked,
 			// so lockstep bumping them would point at a version that is not published yet.
 			const version = versionMap.get(dependencyName);
-			const newSpecifier = version ? `^${version}` : null;
+			// Preserve the existing range operator so exact runtime pins stay exact
+			// while caret ranges keep floating to the newest matching version.
+			const rangePrefix = currentSpecifier.startsWith("^") ? "^" : currentSpecifier.startsWith("~") ? "~" : "";
+			const newSpecifier = version ? `${rangePrefix}${version}` : null;
 			if (!newSpecifier || currentSpecifier === newSpecifier) {
 				continue;
 			}

@@ -23,7 +23,7 @@ import { execSync, spawnSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { findPackageDirectories } from "./package-workspaces.mjs";
-import { getPublicWorkspacePackages } from "./release-packages.mjs";
+import { getPublicWorkspacePackages, getReleaseWorkspacePackages } from "./release-packages.mjs";
 
 const RELEASE_TARGET = process.argv[2];
 const BUMP_TYPES = new Set(["major", "minor", "patch"]);
@@ -53,7 +53,7 @@ function getVersion() {
 }
 
 function assertPackagesAreRegisteredWithNpm() {
-	const packageNames = getPublicWorkspacePackages().map((pkg) => pkg.name);
+	const packageNames = getReleaseWorkspacePackages().map((pkg) => pkg.name);
 	const unregisteredPackages = [];
 
 	console.log("Checking npm package registration...");
@@ -152,7 +152,10 @@ function bumpOrSetVersion(target) {
 		}
 
 		console.log(`Setting explicit version (${target})...`);
-		run(`npm version ${target} --workspaces --no-git-tag-version --no-workspaces-update && node scripts/sync-versions.js && npm install --package-lock-only --ignore-scripts`);
+		const workspaceArgs = getReleaseWorkspacePackages()
+			.map((pkg) => `--workspace ${shellQuote(pkg.name)}`)
+			.join(" ");
+		run(`npm version ${target} ${workspaceArgs} --no-git-tag-version --no-workspaces-update && node scripts/sync-versions.js && npm install --package-lock-only --ignore-scripts`);
 	}
 
 	// npm version can temporarily install the previous workspace versions before

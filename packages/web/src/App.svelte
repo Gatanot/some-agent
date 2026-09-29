@@ -333,7 +333,7 @@
 		const text = draftValue.trim();
 		if (!text || !serverSnapshot?.ready || state.unavailable || state.noModel || state.connection !== "connected" || serverSnapshot.phase === "stopping") return;
 		updateDraft("");
-		void sendLivePrompt(text, draftSessionId, state.phase === "running" ? "steer" : undefined);
+		void sendLivePrompt(text, draftSessionId);
 	}
 
 	async function stopPrompt(): Promise<void> {

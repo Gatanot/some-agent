@@ -29,19 +29,24 @@ test("synchronizes private dependencies without touching registry aliases, gener
 	const root = await mkdtemp(join(tmpdir(), "pi-sync-versions-"));
 	try {
 		await writeManifest(root, "packages/ai", {
-			name: "@earendil-works/pi-ai",
+			name: "@gatanot/orrery-ai",
 			version: "2.0.0",
 		});
 		await writeManifest(root, "packages/coding-agent", {
-			name: "@earendil-works/pi-coding-agent",
+			name: "@gatanot/orrery",
 			version: "2.0.0",
 		});
+		// Vendored upstream packages track their own version and stay outside the fork's release set.
+		await writeManifest(root, "packages/upstream", {
+			name: "@earendil-works/pi-ai",
+			version: "0.84.4",
+		});
 		await writeManifest(root, "packages/evals", {
-			name: "@earendil-works/pi-evals",
+			name: "@gatanot/orrery-evals",
 			version: "9.9.9",
 			private: true,
 			dependencies: {
-				"@earendil-works/pi-coding-agent": "^1.0.0",
+				"@gatanot/orrery": "^1.0.0",
 				"@mariozechner/pi-ai": "npm:@earendil-works/pi-ai@1.0.0",
 			},
 		});
@@ -50,7 +55,7 @@ test("synchronizes private dependencies without touching registry aliases, gener
 			version: "0.0.0",
 			private: true,
 			dependencies: {
-				"@earendil-works/pi-coding-agent": "^1.0.0",
+				"@gatanot/orrery": "^1.0.0",
 			},
 		});
 
@@ -58,13 +63,13 @@ test("synchronizes private dependencies without touching registry aliases, gener
 		assert.equal(result.status, 0, result.stderr);
 
 		const evalsManifest = await readManifest(root, "packages/evals");
-		assert.equal(evalsManifest.dependencies["@earendil-works/pi-coding-agent"], "^2.0.0");
+		assert.equal(evalsManifest.dependencies["@gatanot/orrery"], "^2.0.0");
 		assert.equal(evalsManifest.dependencies["@mariozechner/pi-ai"], "npm:@earendil-works/pi-ai@1.0.0");
 		const generatedManifest = await readManifest(root, "packages/coding-agent/install-lock");
-		assert.equal(generatedManifest.dependencies["@earendil-works/pi-coding-agent"], "^1.0.0");
+		assert.equal(generatedManifest.dependencies["@gatanot/orrery"], "^1.0.0");
 
 		await writeManifest(root, "packages/ai", {
-			name: "@earendil-works/pi-ai",
+			name: "@gatanot/orrery-ai",
 			version: "3.0.0",
 		});
 		const lockstepFailure = runSyncVersions(root);

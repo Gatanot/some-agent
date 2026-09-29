@@ -375,7 +375,18 @@ jobs:
       - name: Verify AWS CLI
         run: aws --version
 
+      - name: Check pi package version
+        id: pi-version
+        run: |
+          pi_version="$(node -p 'require("./packages/ai/package.json").version')"
+          if [[ "${RELEASE_TAG#v}" == "$pi_version" ]]; then
+            echo "announce=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Skipping pi.dev announcement: pi packages remain at $pi_version."
+          fi
+
       - name: Announce verified release on pi.dev
+        if: ${{ steps.pi-version.outputs.announce == 'true' }}
         run: |
           node scripts/publish-release-announcement.mjs \
             --version "${RELEASE_TAG#v}" \

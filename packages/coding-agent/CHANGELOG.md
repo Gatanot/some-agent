@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-29
+
 ### Added
 
 - Added an in-app confirmation dialog when deleting Web UI sessions instead of the browser confirm prompt.

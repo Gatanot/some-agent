@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Plus, Search } from "@lucide/svelte";
+	import { Plus, Search, Trash2 } from "@lucide/svelte";
 	import type { WebSessionMatch, WebSessionSummary, WebSnapshot } from "../protocol.ts";
 
 	export let snapshot: WebSnapshot | undefined;
@@ -7,6 +7,7 @@
 	export let matches: WebSessionMatch[] = [];
 	export let searching = false;
 	export let onSessionSelect: (id: string) => void;
+	export let onDeleteSession: (id: string) => void;
 	export let onSearch: (query: string) => void;
 	export let onNewSession: () => void;
 	export let newSessionDisabled = false;
@@ -81,14 +82,17 @@
 			{:else}
 				<div class="session-period">Results · {matches.length}</div>
 				{#each matches as session (session.id)}
-					<button class:current={session.id === currentId} class="session-item" type="button" aria-current={session.id === currentId} on:click={() => onSessionSelect(session.id)}>
-						<span class={`session-dot ${session.id === currentId && snapshot.prompting ? "active" : ""}`}></span>
-						<span class="session-copy">
-							<span class="session-title">{session.id === currentId ? currentTitle : summaryTitle(session)}</span>
-							{#if session.snippet}<span class="session-snippet" title={session.snippet}>{session.snippet}</span>{/if}
-							<span class="session-meta"><span>{session.matchCount} matches</span><span>{relativeTime(session.modified)}</span></span>
-						</span>
-					</button>
+					<div class="session-entry">
+						<button class:current={session.id === currentId} class="session-item" type="button" aria-current={session.id === currentId} on:click={() => onSessionSelect(session.id)}>
+							<span class={`session-dot ${session.id === currentId && snapshot.prompting ? "active" : ""}`}></span>
+							<span class="session-copy">
+								<span class="session-title">{session.id === currentId ? currentTitle : summaryTitle(session)}</span>
+								{#if session.snippet}<span class="session-snippet" title={session.snippet}>{session.snippet}</span>{/if}
+								<span class="session-meta"><span>{session.matchCount} matches</span><span>{relativeTime(session.modified)}</span></span>
+							</span>
+						</button>
+						{#if session.id !== currentId}<button class="session-delete" type="button" aria-label={`Delete ${summaryTitle(session)}`} title="Delete session" on:click={() => onDeleteSession(session.id)}><Trash2 size={14} /></button>{/if}
+					</div>
 				{/each}
 			{/if}
 		{:else if sessions.length === 0 && !currentId}
@@ -96,13 +100,16 @@
 		{:else}
 			<div class="session-period">Recent</div>
 			{#each sessions as session (session.id)}
-				<button class:current={session.id === currentId} class="session-item" type="button" aria-current={session.id === currentId} on:click={() => onSessionSelect(session.id)}>
-					<span class={`session-dot ${session.id === currentId && snapshot.prompting ? "active" : ""}`}></span>
-					<span class="session-copy">
-						<span class="session-title">{session.id === currentId ? currentTitle : summaryTitle(session)}</span>
-						<span class="session-meta"><span>{summaryMeta(session)}</span><span>{relativeTime(session.modified)}</span></span>
-					</span>
-				</button>
+				<div class="session-entry">
+					<button class:current={session.id === currentId} class="session-item" type="button" aria-current={session.id === currentId} on:click={() => onSessionSelect(session.id)}>
+						<span class={`session-dot ${session.id === currentId && snapshot.prompting ? "active" : ""}`}></span>
+						<span class="session-copy">
+							<span class="session-title">{session.id === currentId ? currentTitle : summaryTitle(session)}</span>
+							<span class="session-meta"><span>{summaryMeta(session)}</span><span>{relativeTime(session.modified)}</span></span>
+						</span>
+					</button>
+					{#if session.id !== currentId}<button class="session-delete" type="button" aria-label={`Delete ${summaryTitle(session)}`} title="Delete session" on:click={() => onDeleteSession(session.id)}><Trash2 size={14} /></button>{/if}
+				</div>
 			{/each}
 			{#if currentId && !sessions.some((session) => session.id === currentId)}
 				<div class="session-item current" aria-current="true">

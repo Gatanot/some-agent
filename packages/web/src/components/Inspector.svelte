@@ -122,8 +122,8 @@
 	}
 
 	function contextPercent(tokens: number): number {
-		if (contextTotal <= 0) return 0;
-		return (tokens / contextTotal) * 100;
+		if (!contextWindow || contextWindow <= 0) return 0;
+		return (tokens / contextWindow) * 100;
 	}
 
 	function contextUsageText(): string {
@@ -178,6 +178,7 @@
 	$: contextParts = snapshot?.sessionStats?.context ?? [];
 	$: contextTotal = contextParts.reduce((sum, part) => sum + part.tokens, 0);
 	$: contextUsage = snapshot?.contextUsage;
+	$: contextWindow = contextUsage?.contextWindow ?? snapshot?.models.find((model) => model.provider === snapshot?.model?.provider && model.id === snapshot?.model?.id)?.contextWindow;
 	$: maxDailyTokens = Math.max(1, ...(usage?.daily.map((day) => day.tokens) ?? []));
 	$: if (usageRefresh !== lastUsageRefresh) {
 		lastUsageRefresh = usageRefresh;
@@ -256,7 +257,7 @@
 			{#if session}
 				<section class="session-block" aria-label="Current session usage">
 					<div class="session-heading"><span>This session</span><span class="session-counts">{session.userMessages} prompts · {session.toolCalls} tool calls</span></div>
-					{#if contextTotal > 0}
+					{#if contextTotal > 0 && contextWindow && contextWindow > 0}
 						<div class="context-bar" role="img" aria-label="Estimated context composition">
 							{#each contextParts as part (part.key)}
 								<span class={`context-segment ${part.key}`} style={`width: ${contextPercent(part.tokens)}%`} title={`${contextLabel(part.key)}: ${formatTokens(part.tokens)} tokens`}></span>

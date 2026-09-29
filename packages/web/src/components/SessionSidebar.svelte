@@ -28,73 +28,73 @@
 				: Array.isArray(content)
 					? content.map(record).map((part) => (typeof part?.text === "string" ? part.text : "")).join("")
 					: "";
-		return text.trim().slice(0, 52) || (snapshot?.ready ? "当前 session" : "等待 session");
+		return text.trim().slice(0, 52) || (snapshot?.ready ? "Current session" : "Waiting for session");
 	}
 
 	function summaryTitle(session: WebSessionSummary): string {
-		return session.name || session.firstMessage.trim().slice(0, 52) || "未命名 session";
+		return session.name || session.firstMessage.trim().slice(0, 52) || "Untitled session";
 	}
 
 	function summaryMeta(session: WebSessionSummary): string {
-		return `${session.messageCount} 条消息`;
+		return `${session.messageCount} messages`;
 	}
 
 	function relativeTime(value: string): string {
 		const timestamp = Date.parse(value);
 		if (!Number.isFinite(timestamp)) return "";
 		const minutes = Math.max(0, Math.floor((Date.now() - timestamp) / 60_000));
-		if (minutes < 1) return "刚刚";
-		if (minutes < 60) return `${minutes} 分钟前`;
+		if (minutes < 1) return "just now";
+		if (minutes < 60) return `${minutes}m ago`;
 		const hours = Math.floor(minutes / 60);
-		if (hours < 24) return `${hours} 小时前`;
+		if (hours < 24) return `${hours}h ago`;
 		const days = Math.floor(hours / 24);
-		return `${days} 天前`;
+		return `${days}d ago`;
 	}
 
-	$: currentTitle = snapshot ? sessionTitle() : "等待 session";
+	$: currentTitle = snapshot ? sessionTitle() : "Waiting for session";
 	$: currentId = snapshot?.sessionId;
 	$: needle = query.trim();
 </script>
 
-<aside class="sidebar" aria-label="会话导航">
+<aside class="sidebar" aria-label="Session navigation">
 	<div class="sidebar-head">
 		<div class="search-row">
 			<div class="search-wrap">
 				<Search size={15} aria-hidden="true" />
-				<label class="visually-hidden" for="session-search">搜索会话</label>
-				<input id="session-search" class="session-search" type="search" bind:value={query} placeholder="搜索标题与会话内容" />
+				<label class="visually-hidden" for="session-search">Search sessions</label>
+				<input id="session-search" class="session-search" type="search" bind:value={query} placeholder="Search titles and transcripts" />
 			</div>
-			<button class="icon-button new-session-button" type="button" aria-label="新建会话" title="新建会话" disabled={newSessionDisabled} on:click={onNewSession}>
+			<button class="icon-button new-session-button" type="button" aria-label="New session" title="New session" disabled={newSessionDisabled} on:click={onNewSession}>
 				<Plus size={16} strokeWidth={1.9} />
 			</button>
 		</div>
 	</div>
 
-	<nav class="session-list" aria-label="历史 sessions">
+	<nav class="session-list" aria-label="Session history">
 		{#if !snapshot}
-			<div class="sidebar-placeholder">正在连接当前会话…</div>
+			<div class="sidebar-placeholder">Connecting to the current session…</div>
 		{:else if needle}
 			{#if searching && matches.length === 0}
-				<div class="sidebar-placeholder">正在搜索…</div>
+				<div class="sidebar-placeholder">Searching…</div>
 			{:else if matches.length === 0}
-				<div class="sidebar-placeholder">没有匹配的会话</div>
+				<div class="sidebar-placeholder">No matching sessions</div>
 			{:else}
-				<div class="session-period">搜索结果 · {matches.length}</div>
+				<div class="session-period">Results · {matches.length}</div>
 				{#each matches as session (session.id)}
 					<button class:current={session.id === currentId} class="session-item" type="button" aria-current={session.id === currentId} on:click={() => onSessionSelect(session.id)}>
 						<span class={`session-dot ${session.id === currentId && snapshot.prompting ? "active" : ""}`}></span>
 						<span class="session-copy">
 							<span class="session-title">{session.id === currentId ? currentTitle : summaryTitle(session)}</span>
 							{#if session.snippet}<span class="session-snippet" title={session.snippet}>{session.snippet}</span>{/if}
-							<span class="session-meta"><span>{session.matchCount} 处匹配</span><span>{relativeTime(session.modified)}</span></span>
+							<span class="session-meta"><span>{session.matchCount} matches</span><span>{relativeTime(session.modified)}</span></span>
 						</span>
 					</button>
 				{/each}
 			{/if}
 		{:else if sessions.length === 0 && !currentId}
-			<div class="sidebar-placeholder">暂无历史会话</div>
+			<div class="sidebar-placeholder">No sessions yet</div>
 		{:else}
-			<div class="session-period">最近会话</div>
+			<div class="session-period">Recent</div>
 			{#each sessions as session (session.id)}
 				<button class:current={session.id === currentId} class="session-item" type="button" aria-current={session.id === currentId} on:click={() => onSessionSelect(session.id)}>
 					<span class={`session-dot ${session.id === currentId && snapshot.prompting ? "active" : ""}`}></span>
@@ -107,7 +107,7 @@
 			{#if currentId && !sessions.some((session) => session.id === currentId)}
 				<div class="session-item current" aria-current="true">
 					<span class={`session-dot ${snapshot.prompting ? "active" : ""}`}></span>
-					<span class="session-copy"><span class="session-title">{currentTitle}</span><span class="session-meta"><span>{snapshot.messages.length} 条消息</span><span>当前</span></span></span>
+					<span class="session-copy"><span class="session-title">{currentTitle}</span><span class="session-meta"><span>{snapshot.messages.length} messages</span><span>Current</span></span></span>
 				</div>
 			{/if}
 		{/if}

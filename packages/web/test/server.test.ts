@@ -790,6 +790,65 @@ test("searches sessions by title and transcript content", async () => {
 	}
 });
 
+test("reads and updates pi settings", async () => {
+	const fixture = await createFixture([fauxAssistantMessage("unused")]);
+	try {
+		const initial = await request(fixture.baseUrl, "/api/settings");
+		assert.equal(initial.response.status, 200);
+		const initialSettings = initial.body as unknown as {
+			retry: { enabled: boolean };
+			compaction: { enabled: boolean; reserveTokens: number; keepRecentTokens: number };
+			modelThinkingLevels: unknown[];
+		};
+		assert.equal(initialSettings.retry.enabled, false);
+		assert.equal(initialSettings.compaction.enabled, true);
+		assert.deepEqual(initialSettings.modelThinkingLevels, []);
+
+		const updated = await request(fixture.baseUrl, "/api/settings", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				defaultModel: { provider: "faux", id: "web-test" },
+				defaultThinkingLevel: "high",
+				compactionEnabled: false,
+				compactionReserveTokens: 4096,
+				modelThinkingLevels: [{ provider: "faux", id: "web-test", level: "low" }],
+			}),
+		});
+		assert.equal(updated.response.status, 200);
+		assert.equal(updated.body.defaultProvider, "faux");
+		assert.equal(updated.body.defaultModel, "web-test");
+		assert.equal(updated.body.defaultThinkingLevel, "high");
+		assert.deepEqual(updated.body.modelThinkingLevels, [{ provider: "faux", id: "web-test", level: "low" }]);
+		assert.equal((updated.body.compaction as { enabled: boolean }).enabled, false);
+		assert.equal((updated.body.compaction as { reserveTokens: number }).reserveTokens, 4096);
+
+		const invalid = await request(fixture.baseUrl, "/api/settings", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ modelThinkingLevels: [{ provider: "faux", id: "web-test", level: "invented" }] }),
+		});
+		assert.equal(invalid.response.status, 400);
+	} finally {
+		await fixture.close();
+	}
+});
+
+test("lists project files for composer mentions", async () => {
+	const fixture = await createFixture([fauxAssistantMessage("unused")], [], { git: true });
+	try {
+		const matches = await request(fixture.baseUrl, "/api/files?q=tracked");
+		assert.equal(matches.response.status, 200);
+		assert.deepEqual(matches.body.files, ["tracked.txt"]);
+
+		const empty = await request(fixture.baseUrl, "/api/files");
+		assert.equal(empty.response.status, 200);
+		assert.ok((empty.body.files as string[]).includes("tracked.txt"));
+	} finally {
+		await fixture.close();
+	}
+});
+
 test("reports project usage for the recent window", async () => {
 	const fixture = await createFixture([fauxAssistantMessage("unused")]);
 	try {

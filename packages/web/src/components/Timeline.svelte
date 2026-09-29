@@ -29,10 +29,10 @@
 		if (code === undefined) return;
 		if (!(await onCopy(code.replace(/\n$/, "")))) return;
 		button.classList.add("copied");
-		button.textContent = "已复制";
+		button.textContent = "Copied";
 		setTimeout(() => {
 			button.classList.remove("copied");
-			button.textContent = "复制";
+			button.textContent = "Copy";
 		}, 1500);
 	}
 
@@ -57,11 +57,11 @@
 <div class="timeline-wrap">
 	{#if state.connection === "disconnected"}
 		<div class="connection-banner">
-			<span><strong>连接断开</strong> · agent 状态仍保留，重连后同步最新快照。</span>
-			<button class="secondary-button" type="button" on:click={onReconnect}><RotateCw size={14} /> 重连</button>
+			<span><strong>Connection lost</strong> · the agent state is preserved and resyncs after reconnecting.</span>
+			<button class="secondary-button" type="button" on:click={onReconnect}><RotateCw size={14} /> Reconnect</button>
 		</div>
 	{/if}
-	<div class="timeline" bind:this={timelineElement} tabindex="-1" role="region" aria-label="消息时间线" on:scroll={handleScroll}>
+	<div class="timeline" bind:this={timelineElement} tabindex="-1" role="region" aria-label="Message timeline" on:scroll={handleScroll}>
 		<div class="timeline-inner">
 			{#if state.notice}
 				<section class={`notice ${state.notice.kind}`}>
@@ -77,12 +77,12 @@
 
 			{#if state.messages.length === 0 && state.unavailable}
 				<section class="empty-state">
-					<div class="empty-title">正在连接工作区</div>
-					<div class="empty-body">连接建立后将显示当前会话。</div>
+					<div class="empty-title">Connecting to the workspace</div>
+					<div class="empty-body">The current session appears once the connection is established.</div>
 				</section>
 			{:else}
 				{#each state.messages as message (message.id)}
-					<article class={`message ${message.role}`} aria-label={message.role === "user" ? "用户消息" : message.role === "tools" ? "工具调用" : "Agent 回复"}>
+					<article class={`message ${message.role}`} aria-label={message.role === "user" ? "User message" : message.role === "tools" ? "Tool calls" : "Agent reply"}>
 						{#if message.role === "tools"}
 							<div class="tool-group">
 								{#each message.tools ?? [] as tool (tool.id)}
@@ -97,17 +97,17 @@
 									{:else if block.type === "thinking"}
 										<details class="thinking"><summary><span class="thinking-label">Thinking...</span></summary><div class="thinking-content markdown-content" use:markdownCopy>{@html block.html}</div></details>
 									{:else if block.type === "code"}
-										<div class="code-block"><div class="code-head"><span>{block.language}</span><CopyButton value={block.text} {onCopy} label="复制代码" /></div><pre>{block.text}</pre></div>
+										<div class="code-block"><div class="code-head"><span>{block.language}</span><CopyButton value={block.text} {onCopy} label="Copy code" /></div><pre>{block.text}</pre></div>
 									{:else if block.type === "largeOutput"}
 										<OutputBlock text={block.text} {onCopy} />
 									{:else if block.type === "image"}
-										<figure class="message-image"><img src={`data:${block.mimeType};base64,${block.data}`} alt="对话图片" loading="lazy" /></figure>
+										<figure class="message-image"><img src={`data:${block.mimeType};base64,${block.data}`} alt="Conversation attachment" loading="lazy" /></figure>
 									{/if}
 								{/each}
 								{#if message.error}
 									<div class="error-block">
 										<div>{message.error}</div>
-										{#if message.errorAction}<div class="error-actions"><button class="error-retry" type="button" on:click={() => onNoticeAction(message.errorAction)}>重试任务</button></div>{/if}
+										{#if message.errorAction}<div class="error-actions"><button class="error-retry" type="button" on:click={() => onNoticeAction(message.errorAction)}>Retry</button></div>{/if}
 									</div>
 								{/if}
 							</div>

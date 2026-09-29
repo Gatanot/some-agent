@@ -36,7 +36,7 @@ const markdown = new Marked({
 	renderer: {
 		code({ text, lang }) {
 			const language = lang?.trim() ? escapeHtml(lang.trim().slice(0, 40)) : "Code";
-			return `<div class="code-block markdown-code-block"><div class="code-head"><span>${language}</span><button class="tool-copy" type="button" data-markdown-copy aria-label="复制代码" title="复制代码">复制</button></div><pre><code${languageClass(lang)}>${highlightCode(text, lang)}\n</code></pre></div>\n`;
+			return `<div class="code-block markdown-code-block"><div class="code-head"><span>${language}</span><button class="tool-copy" type="button" data-markdown-copy aria-label="Copy code" title="Copy code">Copy</button></div><pre><code${languageClass(lang)}>${highlightCode(text, lang)}\n</code></pre></div>\n`;
 		},
 		html({ text }) {
 			return escapeHtml(text);

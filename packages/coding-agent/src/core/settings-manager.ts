@@ -839,6 +839,24 @@ export class SettingsManager {
 		this.save();
 	}
 
+	setCompactionReserveTokens(tokens: number): void {
+		if (!this.globalSettings.compaction) {
+			this.globalSettings.compaction = {};
+		}
+		this.globalSettings.compaction.reserveTokens = Math.max(0, Math.floor(tokens));
+		this.markModified("compaction", "reserveTokens");
+		this.save();
+	}
+
+	setCompactionKeepRecentTokens(tokens: number): void {
+		if (!this.globalSettings.compaction) {
+			this.globalSettings.compaction = {};
+		}
+		this.globalSettings.compaction.keepRecentTokens = Math.max(0, Math.floor(tokens));
+		this.markModified("compaction", "keepRecentTokens");
+		this.save();
+	}
+
 	getCompactionReserveTokens(): number {
 		return this.settings.compaction?.reserveTokens ?? 16384;
 	}

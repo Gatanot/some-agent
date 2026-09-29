@@ -25,7 +25,7 @@ function textContent(value: unknown): string {
 	if (!item) return "";
 	if (item.type === "text") return stringValue(item.text) ?? "";
 	if (item.type === "thinking") return stringValue(item.thinking) ?? "";
-	if (item.type === "image") return "[图片]";
+	if (item.type === "image") return "[image]";
 	return "";
 }
 
@@ -40,13 +40,13 @@ function compactJson(value: unknown): string {
 	try {
 		return JSON.stringify(value, null, 2) ?? "";
 	} catch {
-		return "[无法显示结构化数据]";
+		return "[unable to display structured data]";
 	}
 }
 
 function timestamp(value: unknown): string {
-	if (typeof value !== "number") return "现在";
-	return new Date(value).toLocaleTimeString("zh-CN", { hour: "2-digit", minute: "2-digit" });
+	if (typeof value !== "number") return "now";
+	return new Date(value).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
 function toolTarget(args: unknown): string {
@@ -85,18 +85,18 @@ function imagesFrom(value: unknown): ToolImage[] {
 function thinkingLabel(level: string | undefined): string {
 	switch (level) {
 		case "off":
-			return "关闭";
+			return "Off";
 		case "minimal":
 		case "low":
-			return "低";
+			return "Low";
 		case "high":
 		case "xhigh":
 		case "max":
-			return "高";
+			return "High";
 		case "medium":
-			return "中";
+			return "Medium";
 		default:
-			return level ?? "中";
+			return level ?? "Medium";
 	}
 }
 
@@ -118,7 +118,7 @@ function messageBlocks(message: WireRecord): Block[] {
 			const data = stringValue(part.data);
 			const mimeType = stringValue(part.mimeType);
 			if (data && mimeType) blocks.push({ type: "image", mimeType, data });
-			else blocks.push({ type: "text", text: "[图片]", html: renderMarkdown("[图片]") });
+			else blocks.push({ type: "text", text: "[image]", html: renderMarkdown("[image]") });
 		}
 	}
 	return blocks;
@@ -180,7 +180,7 @@ function toolMessage(
 	return {
 		id: `tools-${index}-${calls.map((call) => stringValue(call.id) ?? "unknown").join("-")}`,
 		role: "tools",
-		label: "工具执行",
+		label: "Tool execution",
 		avatar: "↳",
 		time: timestamp(calls[0]?.timestamp),
 		tools: calls.map((call) => {
@@ -237,8 +237,8 @@ function mapCommittedMessages(
 			output.push({
 				id: `user-${index}-${String(message.timestamp ?? "")}`,
 				role: "user",
-				label: "你",
-				avatar: "你",
+				label: "You",
+				avatar: "You",
 				time: timestamp(message.timestamp),
 				blocks,
 			});
@@ -253,7 +253,7 @@ function mapCommittedMessages(
 			output.push({
 				id: `tool-result-${index}`,
 				role: "tools",
-				label: stringValue(message.toolName) ?? "工具结果",
+				label: stringValue(message.toolName) ?? "Tool result",
 				avatar: "↳",
 				time: timestamp(message.timestamp),
 				tools: [
@@ -300,7 +300,7 @@ function mapMessages(snapshot: WebSnapshot): Message[] {
 	if (streaming && streaming.role === "assistant") {
 		const streamingMessages = assistantMessage(streaming, messages.length, executions, results);
 		for (const message of streamingMessages) {
-			if (message.role === "assistant") message.label = "Orrery · 生成中";
+			if (message.role === "assistant") message.label = "Orrery · streaming";
 			output.push(message);
 		}
 	}
@@ -323,7 +323,7 @@ function mapMessages(snapshot: WebSnapshot): Message[] {
 				role: "assistant",
 				label: "Orrery",
 				avatar: "!",
-				time: "现在",
+				time: "now",
 				blocks: [],
 				error: snapshot.error,
 				errorAction: "retry",
@@ -336,11 +336,11 @@ function mapMessages(snapshot: WebSnapshot): Message[] {
 function usageText(snapshot: WebSnapshot): string {
 	const tokens = snapshot.contextUsage?.tokens;
 	if (typeof tokens === "number") return `${tokens.toLocaleString("en-US")} tokens`;
-	return "未知";
+	return "Unknown";
 }
 
 function modelText(snapshot: WebSnapshot): string {
-	if (!snapshot.model) return "未配置模型";
+	if (!snapshot.model) return "No model configured";
 	return `${snapshot.model.provider} / ${snapshot.model.id}`;
 }
 
@@ -348,7 +348,18 @@ function sessionTitle(snapshot: WebSnapshot): string {
 	if (snapshot.sessionName) return snapshot.sessionName;
 	const firstUser = snapshot.messages.map(record).find((message) => message?.role === "user");
 	const text = firstUser ? contentText(firstUser.content).trim() : "";
-	return text.slice(0, 52) || (snapshot.messages.length > 0 ? "当前 session" : "新 session");
+	return text.slice(0, 52) || (snapshot.messages.length > 0 ? "Current session" : "New session");
+}
+
+/** Text of the most recent user message, used to re-run a failed turn. */
+export function lastUserPromptText(snapshot: WebSnapshot): string {
+	for (let index = snapshot.messages.length - 1; index >= 0; index--) {
+		const message = record(snapshot.messages[index]);
+		if (message?.role !== "user") continue;
+		const text = contentText(message.content).trim();
+		if (text) return text;
+	}
+	return "";
 }
 
 export function snapshotToAppState(
@@ -356,33 +367,33 @@ export function snapshotToAppState(
 	connection: "connected" | "connecting" | "disconnected",
 ): AppState {
 	if (!snapshot.ready) {
-		const error = snapshot.error ?? "Agent session 尚未可用";
+		const error = snapshot.error ?? "Agent session is not available yet";
 		const noModel = error.toLowerCase().includes("model");
 		return {
-			title: noModel ? "还没有可用模型" : "无法初始化 agent",
+			title: noModel ? "No model available yet" : "Could not initialize the agent",
 			subtitle: snapshot.cwd,
 			sessionId: "",
 			phase: "unavailable",
-			phaseLabel: connection === "disconnected" ? "连接断开" : "不可用",
+			phaseLabel: connection === "disconnected" ? "Disconnected" : "Unavailable",
 			phaseTone: connection === "disconnected" ? "disconnected" : "error",
 			connection,
-			model: "未配置模型",
+			model: "No model configured",
 			modelKey: "",
 			models: [],
-			thinking: "中",
+			thinking: "Medium",
 			thinkingLevel: snapshot.thinkingLevel ?? "off",
 			thinkingLevels: [],
-			usage: "等待配置",
+			usage: "Waiting for configuration",
 			messages: [],
 			draft: "",
 			noModel,
 			unavailable: !noModel,
 			notice: {
 				kind: noModel ? "warning" : "error",
-				title: noModel ? "需要先配置模型" : "Agent session 不可用",
+				title: noModel ? "Configure a model first" : "Agent session unavailable",
 				body: error,
 				action: noModel ? "configure" : "retry",
-				actionLabel: noModel ? "打开配置" : "重试连接",
+				actionLabel: noModel ? "Open settings" : "Retry connection",
 			},
 		};
 	}
@@ -403,10 +414,10 @@ export function snapshotToAppState(
 			snapshot.phase === "streaming"
 				? "Working"
 				: snapshot.phase === "stopping"
-					? "停止中"
+					? "Stopping"
 					: hasError
 						? "Error"
-						: "空闲",
+						: "Idle",
 		phaseTone: running ? "running" : hasError ? "error" : "idle",
 		connection,
 		model: modelText(snapshot),
@@ -424,18 +435,18 @@ export function snapshotToAppState(
 			? {
 					notice: {
 						kind: "error" as const,
-						title: "这一轮执行失败",
+						title: "This turn failed",
 						body: snapshot.error,
 						action: "retry" as const,
-						actionLabel: "重试任务",
+						actionLabel: "Retry",
 					},
 				}
 			: !hasUsableModel
 				? {
 						notice: {
 							kind: "warning" as const,
-							title: "需要配置可用模型",
-							body: "当前 session 尚未选择已认证的可用模型。",
+							title: "Configure an available model",
+							body: "The current session has no authenticated model selected.",
 						},
 					}
 				: {}),

@@ -74,6 +74,22 @@ export interface WebContextUsage {
 	percent: number | null;
 }
 
+export type WebContextPartKey = "config" | "user" | "tools" | "assistant";
+
+export interface WebContextPart {
+	key: WebContextPartKey;
+	tokens: number;
+}
+
+export interface WebSessionStats {
+	userMessages: number;
+	assistantMessages: number;
+	toolCalls: number;
+	tokens: number;
+	cost: number;
+	context: WebContextPart[];
+}
+
 export interface WebUsageModel {
 	key: string;
 	tokens: number;
@@ -98,6 +114,36 @@ export interface QueuedMessages {
 	steering: string[];
 	followUp: string[];
 }
+
+export interface WebSettingsModelThinkingLevel {
+	provider: string;
+	id: string;
+	level: string;
+}
+
+/** Editable pi settings surfaced in the web settings page. */
+export interface WebSettings {
+	defaultProvider?: string;
+	defaultModel?: string;
+	defaultThinkingLevel?: string;
+	modelThinkingLevels: WebSettingsModelThinkingLevel[];
+	compaction: { enabled: boolean; reserveTokens: number; keepRecentTokens: number };
+	steeringMode: "all" | "one-at-a-time";
+	followUpMode: "all" | "one-at-a-time";
+	retry: { enabled: boolean; maxRetries: number; baseDelayMs: number };
+}
+
+export type WebSettingsPatch = Partial<{
+	defaultModel: { provider: string; id: string } | null;
+	defaultThinkingLevel: string | null;
+	modelThinkingLevels: WebSettingsModelThinkingLevel[];
+	compactionEnabled: boolean;
+	compactionReserveTokens: number;
+	compactionKeepRecentTokens: number;
+	steeringMode: "all" | "one-at-a-time";
+	followUpMode: "all" | "one-at-a-time";
+	retryEnabled: boolean;
+}>;
 
 /**
  * Fields that change while a turn streams. Sent on every stream update so the client can
@@ -124,6 +170,7 @@ export interface WebSnapshotDelta {
 /** Full state. Sent when a client connects and whenever the transcript or heavy metadata changes. */
 export interface WebSnapshot extends WebSnapshotDelta {
 	messages: unknown[];
+	sessionStats?: WebSessionStats;
 	git: WebGitState;
 	model?: {
 		provider: string;

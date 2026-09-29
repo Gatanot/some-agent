@@ -9,8 +9,11 @@ const repoRoot = resolve(scriptDir, "..");
 const codingAgentDir = join(repoRoot, "packages/coding-agent");
 const rootLockfilePath = join(repoRoot, "package-lock.json");
 const shrinkwrapPath = join(codingAgentDir, "npm-shrinkwrap.json");
-const internalPackagePrefixes = ["@gatanot/"];
-const allowedInstallScriptPackages = new Map([]);
+const internalPackagePrefixes = ["@gatanot/", "@earendil-works/pi-"];
+const allowedInstallScriptPackages = new Map([
+	["@google/genai@1.52.0", "Required by pi-ai's Google provider runtime."],
+	["protobufjs@7.6.5", "Required by @google/genai's runtime."],
+]);
 
 const args = new Set(process.argv.slice(2));
 const checkOnly = args.has("--check");

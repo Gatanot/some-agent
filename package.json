@@ -30,7 +30,7 @@
 		"check:model-catalog": "node scripts/publish-model-catalog.mjs --input .artifacts/model-catalog --dry-run",
 		"profile:tui": "node scripts/profile-coding-agent-node.mjs --mode tui",
 		"profile:rpc": "node scripts/profile-coding-agent-node.mjs --mode rpc",
-		"web": "npm --prefix packages/web start",
+		"web": "tsx packages/web/src/server.ts",
 		"build:web": "npm --prefix packages/coding-agent run build:web",
 		"test": "npm run test:scripts && npm run test --workspaces --if-present",
 		"test:scripts": "node --test scripts/*.test.mjs",

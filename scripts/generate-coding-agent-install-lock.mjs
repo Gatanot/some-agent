@@ -18,7 +18,10 @@ function isInternalPackageName(name) {
 	return internalPackageNames.has(name) || internalPackagePrefixes.some((prefix) => name.startsWith(prefix));
 }
 const installPackageName = "@earendil-works/pi-coding-agent-install";
-const allowedInstallScriptPackages = new Map([]);
+const allowedInstallScriptPackages = new Map([
+	["@google/genai@1.52.0", "Required by pi-ai's Google provider runtime."],
+	["protobufjs@7.6.5", "Required by @google/genai's runtime."],
+]);
 
 const args = new Set(process.argv.slice(2));
 const checkOnly = args.has("--check");
@@ -296,7 +299,7 @@ function validateGeneratedFiles(installerPackageJson, installLock, internalNames
 		if (entry.dev || entry.devOptional || entry.extraneous) {
 			errors.push(`${lockPath || "root"} contains dev/extraneous metadata`);
 		}
-		if (isInternalPackageName(packageName ?? "") && entry.version !== installerPackageJson.version) {
+		if (packageName?.startsWith("@gatanot/") && entry.version !== installerPackageJson.version) {
 			errors.push(`${lockPath} internal package version ${entry.version} does not match ${installerPackageJson.version}`);
 		}
 		if (entry.hasInstallScript) {

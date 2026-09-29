@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
-	import { PanelRightOpen, Pencil, Settings as SettingsIcon } from "@lucide/svelte";
+	import { PanelRightOpen, Pencil, Settings as SettingsIcon, X } from "@lucide/svelte";
 	import Composer from "./components/Composer.svelte";
 	import Inspector from "./components/Inspector.svelte";
 	import SessionSidebar from "./components/SessionSidebar.svelte";
@@ -62,6 +62,7 @@
 
 	let inspectorOpen = false;
 	let settingsOpen = false;
+	let pendingDelete: { id: string; title: string } | undefined = undefined;
 	let serverSnapshot: WebSnapshot | undefined;
 	// Snapshots are applied to `latestSnapshot` immediately and rendered at most once per frame so
 	// a burst of stream updates cannot force a full re-render per token.
@@ -172,10 +173,13 @@
 	}
 
 	function handleEscape(event: KeyboardEvent): void {
-		if (event.key === "Escape") {
-			inspectorOpen = false;
-			settingsOpen = false;
+		if (event.key !== "Escape") return;
+		if (pendingDelete) {
+			pendingDelete = undefined;
+			return;
 		}
+		inspectorOpen = false;
+		settingsOpen = false;
 	}
 
 	function flushSnapshotFrame(): void {
@@ -276,15 +280,21 @@
 		}
 	}
 
-	async function deleteSession(id: string): Promise<void> {
+	function requestDeleteSession(id: string): void {
 		if (state.phase === "running" || state.phase === "stopping" || id === state.sessionId) return;
 		const summary = sessionSummaries.find((session) => session.id === id);
 		const title = summary?.name ?? summary?.firstMessage ?? "this session";
-		if (!window.confirm(`Delete session “${title}”? This also removes its usage history from project totals.`)) return;
+		pendingDelete = { id, title };
+	}
+
+	async function confirmDeleteSession(): Promise<void> {
+		const target = pendingDelete;
+		if (!target) return;
+		pendingDelete = undefined;
 		try {
-			await postJson("/api/session/delete", { id });
+			await postJson("/api/session/delete", { id: target.id });
 			await loadSessions();
-			sessionMatches = sessionMatches.filter((match) => match.id !== id);
+			sessionMatches = sessionMatches.filter((match) => match.id !== target.id);
 			if (inspectorTab === "usage") usageRefreshToken += 1;
 		} catch (error) {
 			logNotice(error instanceof Error ? error.message : String(error));
@@ -429,7 +439,7 @@
 			matches={sessionMatches}
 			searching={sessionSearching}
 			onSessionSelect={selectSession}
-			onDeleteSession={deleteSession}
+			onDeleteSession={requestDeleteSession}
 			onSearch={searchSessions}
 			onNewSession={newSession}
 			newSessionDisabled={state.phase === "running" || state.phase === "stopping"}
@@ -457,5 +467,21 @@
 		{#if inspectorOpen}<button class="inspector-backdrop" type="button" aria-label="Close inspector" on:click={() => (inspectorOpen = false)}></button>{/if}
 		<Inspector state={state} snapshot={serverSnapshot} activeTab={inspectorTab} open={inspectorOpen} {connectionStatus} {theme} {themeActionLabel} onToggleTheme={toggleTheme} onClose={() => (inspectorOpen = false)} onTabSelect={selectInspectorTab} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} usageRefresh={usageRefreshToken} />
 		<Settings open={settingsOpen} models={state.models} onClose={() => (settingsOpen = false)} />
+		{#if pendingDelete}
+			<button class="confirm-backdrop" type="button" aria-label="Cancel session deletion" on:click={() => (pendingDelete = undefined)}></button>
+			<div class="confirm-panel" role="alertdialog" aria-modal="true" aria-labelledby="confirm-delete-title" aria-describedby="confirm-delete-text">
+				<header class="settings-head">
+					<h2 id="confirm-delete-title">Delete session</h2>
+					<button class="icon-button" type="button" aria-label="Cancel session deletion" title="Cancel" on:click={() => (pendingDelete = undefined)}><X size={17} /></button>
+				</header>
+				<div class="confirm-body">
+					<p class="confirm-text" id="confirm-delete-text">Delete session “{pendingDelete.title}”? This also removes its usage history from project totals.</p>
+					<div class="confirm-actions">
+						<button class="secondary-button" type="button" on:click={() => (pendingDelete = undefined)}>Cancel</button>
+						<button class="danger-button" type="button" on:click={confirmDeleteSession}>Delete session</button>
+					</div>
+				</div>
+			</div>
+		{/if}
 	</main>
 </div>

@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+
+- Added an in-app confirmation dialog when deleting Web UI sessions instead of the browser confirm prompt.
+
+### Fixed
+
+- Fixed the Fireworks, Together, and OpenCode Go default models pointing at IDs that no longer exist in the generated model catalog.
+- Fixed cached auth and model state missing same-size file updates on filesystems with coarse timestamps (for example WSL mounts).
+
 ## [0.2.0] - 2026-09-29
 
 ### Added

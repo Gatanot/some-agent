@@ -856,6 +856,20 @@ export class SettingsManager {
 		this.save();
 	}
 
+	setCompactionReserveTokens(tokens: number): void {
+		this.globalSettings.compaction ??= {};
+		this.globalSettings.compaction.reserveTokens = Math.max(0, Math.floor(tokens));
+		this.markModified("compaction", "reserveTokens");
+		this.save();
+	}
+
+	setCompactionKeepRecentTokens(tokens: number): void {
+		this.globalSettings.compaction ??= {};
+		this.globalSettings.compaction.keepRecentTokens = Math.max(0, Math.floor(tokens));
+		this.markModified("compaction", "keepRecentTokens");
+		this.save();
+	}
+
 	private getCompactionTokenSetting(
 		field: keyof CompactionModelOverride,
 		model?: Pick<Model<string>, "provider" | "id">,

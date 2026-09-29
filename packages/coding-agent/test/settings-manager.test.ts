@@ -25,6 +25,20 @@ describe("SettingsManager", () => {
 		}
 	});
 
+	it("persists compaction token limits", async () => {
+		const manager = SettingsManager.create(projectDir, agentDir);
+		expect(manager.getCompactionSettings()).toEqual({ enabled: true, reserveTokens: 16384, keepRecentTokens: 20000 });
+
+		manager.setCompactionEnabled(false);
+		manager.setCompactionReserveTokens(4096.9);
+		manager.setCompactionKeepRecentTokens(-10);
+		await manager.flush();
+
+		expect(manager.getCompactionSettings()).toEqual({ enabled: false, reserveTokens: 4096, keepRecentTokens: 0 });
+		const saved = JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf-8"));
+		expect(saved.compaction).toEqual({ enabled: false, reserveTokens: 4096, keepRecentTokens: 0 });
+	});
+
 	describe("preserves externally added settings", () => {
 		it("should preserve enabledModels when changing thinking level", async () => {
 			// Create initial settings file

@@ -1,11 +1,12 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
-	import { PanelRightOpen, Pencil } from "@lucide/svelte";
+	import { PanelRightOpen, Pencil, Settings as SettingsIcon } from "@lucide/svelte";
 	import Composer from "./components/Composer.svelte";
 	import Inspector from "./components/Inspector.svelte";
 	import SessionSidebar from "./components/SessionSidebar.svelte";
+	import Settings from "./components/Settings.svelte";
 	import Timeline from "./components/Timeline.svelte";
-	import { snapshotToAppState } from "./live.ts";
+	import { lastUserPromptText, snapshotToAppState } from "./live.ts";
 	import type { WebEventEnvelope, WebGitDiff, WebSessionMatch, WebSessionSearchResponse, WebSessionSummary, WebSessionsResponse, WebSnapshot } from "./protocol.ts";
 	import type { AppState } from "./types.ts";
 
@@ -14,7 +15,7 @@
 	type ThemeName = keyof typeof themeColors;
 	let theme: ThemeName = currentTheme();
 	let themeActionLabel = "";
-	$: themeActionLabel = theme === "light" ? "切换到深色主题" : "切换到浅色主题";
+	$: themeActionLabel = theme === "light" ? "Switch to dark theme" : "Switch to light theme";
 
 	function isThemeName(value: unknown): value is ThemeName {
 		return value === "light" || value === "dark";
@@ -60,6 +61,7 @@
 	}
 
 	let inspectorOpen = false;
+	let settingsOpen = false;
 	let serverSnapshot: WebSnapshot | undefined;
 	// Snapshots are applied to `latestSnapshot` immediately and rendered at most once per frame so
 	// a burst of stream updates cannot force a full re-render per token.
@@ -71,7 +73,7 @@
 	let sessionSearching = false;
 	let sessionSearchRequest = 0;
 	let sessionSearchTimer: ReturnType<typeof setTimeout> | undefined;
-	let inspectorTab: "changes" | "terminal" | "usage" = "changes";
+	let inspectorTab: "changes" | "usage" = "changes";
 	let connectionStatus: "connecting" | "connected" | "disconnected" = "connecting";
 	let eventStream: EventSource | undefined;
 	let draftValue = "";
@@ -83,20 +85,20 @@
 
 	function loadingState(): AppState {
 		return {
-			title: "连接本地 agent",
-			subtitle: "正在同步当前 session",
+			title: "Connecting to the local agent",
+			subtitle: "Syncing the current session",
 			sessionId: "",
 			phase: "unavailable",
-			phaseLabel: connectionStatus === "disconnected" ? "连接断开" : "连接中",
+			phaseLabel: connectionStatus === "disconnected" ? "Disconnected" : "Connecting",
 			phaseTone: connectionStatus === "disconnected" ? "disconnected" : "idle",
 			connection: connectionStatus,
-			model: "等待 session",
+			model: "Waiting for session",
 			modelKey: "",
 			models: [],
-			thinking: "中",
+			thinking: "Medium",
 			thinkingLevel: "medium",
 			thinkingLevels: [],
-			usage: "未知",
+			usage: "Unknown",
 			messages: [],
 			draft: "",
 			unavailable: true,
@@ -158,12 +160,22 @@
 		console.warn(`[orrery-web] ${message}`);
 	}
 
-	function selectInspectorTab(tab: "changes" | "terminal" | "usage"): void {
+	async function searchFiles(query: string): Promise<string[]> {
+		const response = await fetch(`/api/files?q=${encodeURIComponent(query)}`);
+		const payload = (await response.json().catch(() => ({}))) as { files?: string[]; error?: string };
+		if (!response.ok) throw new Error(payload.error ?? `File search failed (${response.status})`);
+		return payload.files ?? [];
+	}
+
+	function selectInspectorTab(tab: "changes" | "usage"): void {
 		inspectorTab = tab;
 	}
 
 	function handleEscape(event: KeyboardEvent): void {
-		if (event.key === "Escape") inspectorOpen = false;
+		if (event.key === "Escape") {
+			inspectorOpen = false;
+			settingsOpen = false;
+		}
 	}
 
 	function flushSnapshotFrame(): void {
@@ -189,7 +201,7 @@
 				void loadSessions();
 			}
 		} catch {
-			logNotice("收到无法识别的 agent 状态");
+			logNotice("Received an unrecognized agent state");
 		}
 	}
 
@@ -216,7 +228,7 @@
 			body: body ? JSON.stringify(body) : undefined,
 		});
 		const payload = (await response.json().catch(() => ({}))) as { error?: string };
-		if (!response.ok) throw new Error(payload.error ?? `请求失败 (${response.status})`);
+		if (!response.ok) throw new Error(payload.error ?? `Request failed (${response.status})`);
 	}
 
 	async function loadSessions(): Promise<void> {
@@ -224,7 +236,7 @@
 		try {
 			const response = await fetch("/api/sessions");
 			const payload = (await response.json()) as WebSessionsResponse & { error?: string };
-			if (!response.ok) throw new Error(payload.error ?? `加载 session 失败 (${response.status})`);
+			if (!response.ok) throw new Error(payload.error ?? `Failed to load sessions (${response.status})`);
 			if (requestId === sessionListRequest) sessionSummaries = payload.sessions;
 		} catch (error) {
 			if (requestId === sessionListRequest) logNotice(error instanceof Error ? error.message : String(error));
@@ -252,7 +264,7 @@
 		try {
 			const response = await fetch(`/api/sessions/search?q=${encodeURIComponent(query)}`);
 			const payload = (await response.json()) as WebSessionSearchResponse & { error?: string };
-			if (!response.ok) throw new Error(payload.error ?? `搜索失败 (${response.status})`);
+			if (!response.ok) throw new Error(payload.error ?? `Search failed (${response.status})`);
 			if (requestId === sessionSearchRequest) sessionMatches = payload.matches;
 		} catch (error) {
 			if (requestId === sessionSearchRequest) {
@@ -266,7 +278,7 @@
 
 	async function selectSession(id: string): Promise<void> {
 		if (state.phase === "running" || state.phase === "stopping") {
-			logNotice("当前任务结束后才能切换 session");
+			logNotice("Wait for the current task before switching sessions");
 			return;
 		}
 		try {
@@ -278,13 +290,13 @@
 
 	async function newSession(): Promise<void> {
 		if (state.phase === "running" || state.phase === "stopping") {
-			logNotice("当前任务结束后才能新建 session");
+			logNotice("Wait for the current task before creating a session");
 			return;
 		}
 		try {
 			await postJson("/api/new");
 			draftBySession = new Map(draftBySession);
-			logNotice("已创建新 session");
+			logNotice("Created a new session");
 		} catch (error) {
 			logNotice(error instanceof Error ? error.message : String(error));
 		}
@@ -318,11 +330,21 @@
 	}
 
 	function retryTask(): void {
-		logNotice("请确认输入区中的内容后重新发送");
+		if (state.phase === "running" || state.phase === "stopping") return;
+		if (!serverSnapshot?.ready) {
+			connectEvents();
+			return;
+		}
+		const prompt = lastUserPromptText(serverSnapshot);
+		if (!prompt) {
+			logNotice("There is no user message to retry");
+			return;
+		}
+		void sendLivePrompt(prompt, serverSnapshot.sessionId);
 	}
 
 	function configure(): void {
-		logNotice("模型配置将在后续版本接入");
+		settingsOpen = true;
 	}
 
 	async function refreshGit(): Promise<void> {
@@ -341,7 +363,7 @@
 			truncated?: boolean;
 			error?: string;
 		};
-		if (!response.ok) throw new Error(payload.error ?? `读取 diff 失败 (${response.status})`);
+		if (!response.ok) throw new Error(payload.error ?? `Failed to load diff (${response.status})`);
 		return { path: payload.path ?? path, diff: payload.diff ?? "", truncated: payload.truncated === true };
 	}
 
@@ -396,13 +418,13 @@
 			onNewSession={newSession}
 			newSessionDisabled={state.phase === "running" || state.phase === "stopping"}
 		/>
-		<section class="main-panel" aria-label="会话工作区">
+		<section class="main-panel" aria-label="Session workspace">
 			<header class="session-bar">
 				<div class="session-title-block">
-					<div class="session-title-line"><h1 class="current-title" title={state.title}>{state.title}</h1>{#if serverSnapshot?.ready}<button class="icon-button rename-button" type="button" aria-label="重命名会话" title="重命名会话" disabled={sessionNameEditing} on:click={renameSession}><Pencil size={14} /></button>{/if}</div>
-					<div class="session-facts"><span class={`run-status ${state.phaseTone}`} aria-live="polite"><span class="status-dot" aria-hidden="true"></span>{state.phaseLabel}</span>{#if state.sessionId}<span class="session-id" title={state.sessionId}>ID {state.sessionId.slice(0, 8)}</span>{/if}<span>{state.messages.length} 条消息</span></div>
+					<div class="session-title-line"><h1 class="current-title" title={state.title}>{state.title}</h1>{#if serverSnapshot?.ready}<button class="icon-button rename-button" type="button" aria-label="Rename session" title="Rename session" disabled={sessionNameEditing} on:click={renameSession}><Pencil size={14} /></button>{/if}</div>
+					<div class="session-facts"><span class={`run-status ${state.phaseTone}`} aria-live="polite"><span class="status-dot" aria-hidden="true"></span>{state.phaseLabel}</span>{#if state.sessionId}<span class="session-id" title={state.sessionId}>ID {state.sessionId.slice(0, 8)}</span>{/if}<span>{state.messages.length} messages</span></div>
 				</div>
-				<div class="toolbar-actions"><button class="icon-button inspector-trigger" type="button" aria-label="打开检查栏" title="打开检查栏" aria-expanded={inspectorOpen} on:click={() => { inspectorOpen = !inspectorOpen; }}><PanelRightOpen size={17} /></button></div>
+				<div class="toolbar-actions"><button class="icon-button" type="button" aria-label="Open settings" title="Open settings" aria-expanded={settingsOpen} on:click={() => (settingsOpen = true)}><SettingsIcon size={17} /></button><button class="icon-button inspector-trigger" type="button" aria-label="Open inspector" title="Open inspector" aria-expanded={inspectorOpen} on:click={() => { inspectorOpen = !inspectorOpen; }}><PanelRightOpen size={17} /></button></div>
 			</header>
 			<Timeline state={state} onNoticeAction={noticeAction} onCopy={copyText} onReconnect={connectEvents} />
 			<Composer
@@ -413,9 +435,11 @@
 				onStop={stopPrompt}
 				onModelChange={changeModel}
 				onThinkingChange={changeThinkingLevel}
+				onFileSearch={searchFiles}
 			/>
 		</section>
-		{#if inspectorOpen}<button class="inspector-backdrop" type="button" aria-label="关闭检查栏" on:click={() => (inspectorOpen = false)}></button>{/if}
+		{#if inspectorOpen}<button class="inspector-backdrop" type="button" aria-label="Close inspector" on:click={() => (inspectorOpen = false)}></button>{/if}
 		<Inspector state={state} snapshot={serverSnapshot} activeTab={inspectorTab} open={inspectorOpen} {connectionStatus} {theme} {themeActionLabel} onToggleTheme={toggleTheme} onClose={() => (inspectorOpen = false)} onTabSelect={selectInspectorTab} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} usageRefresh={usageRefreshToken} />
+		<Settings open={settingsOpen} models={state.models} onClose={() => (settingsOpen = false)} />
 	</main>
 </div>

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { snapshotToAppState } from "../src/live.ts";
+import { lastUserPromptText, snapshotToAppState } from "../src/live.ts";
 import type { WebSnapshot } from "../src/protocol.ts";
 
 function snapshot(overrides: Partial<WebSnapshot> = {}): WebSnapshot {
@@ -129,7 +129,7 @@ test("keeps streaming assistant and partial tool execution visible after refresh
 	assert.equal(state.phase, "running");
 	assert.equal(state.phaseTone, "running");
 	assert.equal(state.messages.at(-1)?.role, "assistant");
-	assert.equal(state.messages.at(-1)?.label, "Orrery · 生成中");
+	assert.equal(state.messages.at(-1)?.label, "Orrery · streaming");
 	const toolMessage = state.messages.find((message) => message.role === "tools");
 	assert.equal(toolMessage?.tools?.[0]?.status, "running");
 	assert.match(toolMessage?.tools?.[0]?.output as string, /checking/);
@@ -232,6 +232,19 @@ test("shows a turn error at the end of the conversation", () => {
 	assert.equal(withoutMessageError.messages.at(-1)?.error, "session failed to start");
 	assert.equal(withoutMessageError.messages.at(-1)?.errorAction, "retry");
 	assert.equal(withoutMessageError.notice, undefined);
+});
+
+test("extracts the last user prompt so a failed turn can be retried", () => {
+	const value = snapshot({
+		messages: [
+			{ role: "user", content: [{ type: "text", text: "first" }], timestamp: 1 },
+			{ role: "assistant", content: "reply", timestamp: 2 },
+			{ role: "user", content: [{ type: "text", text: "second" }], timestamp: 3 },
+			{ role: "assistant", content: [], stopReason: "error", errorMessage: "boom", timestamp: 4 },
+		],
+	});
+	assert.equal(lastUserPromptText(value), "second");
+	assert.equal(lastUserPromptText(snapshot()), "");
 });
 
 test("renders edit results as diff lines", () => {

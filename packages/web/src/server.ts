@@ -3,17 +3,22 @@ import { createServer, type IncomingMessage, type Server, type ServerResponse } 
 import type { AddressInfo } from "node:net";
 import { extname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { AgentSession, AgentSessionEvent, SessionInfo } from "@gatanot/orrery";
+import type { AgentSession, AgentSessionEvent, SessionInfo, SettingsManager } from "@gatanot/orrery";
 import { createAgentSession, SessionManager } from "@gatanot/orrery";
 import { createServer as createViteServer, type ViteDevServer } from "vite";
+import { contextBreakdown } from "./context.ts";
+import { parseFileLimit, searchProjectFiles } from "./files.ts";
 import { readGitDiff, readGitStatus } from "./git.ts";
 import type {
 	WebEventEnvelope,
 	WebGitState,
 	WebSessionMatch,
 	WebSessionSearchResponse,
+	WebSessionStats,
 	WebSessionSummary,
 	WebSessionsResponse,
+	WebSettings,
+	WebSettingsModelThinkingLevel,
 	WebSnapshot,
 	WebSnapshotDelta,
 	WebToolExecution,
@@ -208,6 +213,117 @@ async function searchSessions(rawQuery: string, limit: number): Promise<WebSessi
 	return { query, matches: matches.slice(0, limit) };
 }
 
+type ThinkingLevelValue = Parameters<SettingsManager["setDefaultThinkingLevel"]>[0];
+const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+	return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isThinkingLevel(value: unknown): value is ThinkingLevelValue {
+	return typeof value === "string" && (THINKING_LEVELS as readonly string[]).includes(value);
+}
+
+function isNonNegativeInteger(value: unknown): value is number {
+	return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
+function splitModelThinkingKey(key: string): { provider: string; id: string } {
+	const slash = key.indexOf("/");
+	return slash < 0 ? { provider: key, id: "" } : { provider: key.slice(0, slash), id: key.slice(slash + 1) };
+}
+
+function settingsView(manager: SettingsManager): WebSettings {
+	const modelThinkingLevels: WebSettingsModelThinkingLevel[] = Object.entries(manager.getAllModelThinkingLevels()).map(
+		([key, level]) => ({ ...splitModelThinkingKey(key), level }),
+	);
+	const defaultProvider = manager.getDefaultProvider();
+	const defaultModel = manager.getDefaultModel();
+	const defaultThinkingLevel = manager.getDefaultThinkingLevel();
+	return {
+		...(defaultProvider ? { defaultProvider } : {}),
+		...(defaultModel ? { defaultModel } : {}),
+		...(defaultThinkingLevel ? { defaultThinkingLevel } : {}),
+		modelThinkingLevels,
+		compaction: manager.getCompactionSettings(),
+		steeringMode: manager.getSteeringMode(),
+		followUpMode: manager.getFollowUpMode(),
+		retry: manager.getRetrySettings(),
+	};
+}
+
+/** Applies a validated settings patch. Model thinking-level overrides are replaced as a set. */
+function applySettingsPatch(manager: SettingsManager, body: Record<string, unknown>): void {
+	if ("defaultModel" in body) {
+		const value = body.defaultModel;
+		if (value !== null) {
+			if (!isPlainObject(value) || typeof value.provider !== "string" || typeof value.id !== "string") {
+				throw new HttpRequestError(400, "defaultModel must be { provider, id }");
+			}
+			manager.setDefaultModelAndProvider(value.provider, value.id);
+		}
+	}
+
+	if ("defaultThinkingLevel" in body) {
+		const value = body.defaultThinkingLevel;
+		if (value !== null) {
+			if (!isThinkingLevel(value)) throw new HttpRequestError(400, "defaultThinkingLevel is not valid");
+			manager.setDefaultThinkingLevel(value);
+		}
+	}
+
+	if ("modelThinkingLevels" in body) {
+		const value = body.modelThinkingLevels;
+		if (!Array.isArray(value)) throw new HttpRequestError(400, "modelThinkingLevels must be an array");
+		const entries = value.map((entry) => {
+			if (
+				!isPlainObject(entry) ||
+				typeof entry.provider !== "string" ||
+				typeof entry.id !== "string" ||
+				!isThinkingLevel(entry.level)
+			) {
+				throw new HttpRequestError(400, "Each modelThinkingLevels entry needs provider, id and level");
+			}
+			return { provider: entry.provider, id: entry.id, level: entry.level };
+		});
+		for (const key of Object.keys(manager.getAllModelThinkingLevels())) {
+			const { provider, id } = splitModelThinkingKey(key);
+			manager.removeModelThinkingLevel(provider, id);
+		}
+		for (const entry of entries) manager.setModelThinkingLevel(entry.provider, entry.id, entry.level);
+	}
+
+	if ("compactionEnabled" in body) {
+		if (typeof body.compactionEnabled !== "boolean")
+			throw new HttpRequestError(400, "compactionEnabled must be a boolean");
+		manager.setCompactionEnabled(body.compactionEnabled);
+	}
+	if ("compactionReserveTokens" in body) {
+		if (!isNonNegativeInteger(body.compactionReserveTokens))
+			throw new HttpRequestError(400, "compactionReserveTokens must be a non-negative integer");
+		manager.setCompactionReserveTokens(body.compactionReserveTokens);
+	}
+	if ("compactionKeepRecentTokens" in body) {
+		if (!isNonNegativeInteger(body.compactionKeepRecentTokens))
+			throw new HttpRequestError(400, "compactionKeepRecentTokens must be a non-negative integer");
+		manager.setCompactionKeepRecentTokens(body.compactionKeepRecentTokens);
+	}
+	if ("steeringMode" in body) {
+		if (body.steeringMode !== "all" && body.steeringMode !== "one-at-a-time")
+			throw new HttpRequestError(400, "steeringMode is not valid");
+		manager.setSteeringMode(body.steeringMode);
+	}
+	if ("followUpMode" in body) {
+		if (body.followUpMode !== "all" && body.followUpMode !== "one-at-a-time")
+			throw new HttpRequestError(400, "followUpMode is not valid");
+		manager.setFollowUpMode(body.followUpMode);
+	}
+	if ("retryEnabled" in body) {
+		if (typeof body.retryEnabled !== "boolean") throw new HttpRequestError(400, "retryEnabled must be a boolean");
+		manager.setRetryEnabled(body.retryEnabled);
+	}
+}
+
 function parseUsageDays(value: string | null): number {
 	if (!value) return DEFAULT_USAGE_DAYS;
 	const parsed = Number.parseInt(value, 10);
@@ -350,9 +466,23 @@ function sessionDelta(): WebSnapshotDelta {
 	};
 }
 
+function sessionStatsView(): WebSessionStats | undefined {
+	if (!session) return undefined;
+	const stats = session.getSessionStats();
+	return {
+		userMessages: stats.userMessages,
+		assistantMessages: stats.assistantMessages,
+		toolCalls: stats.toolCalls,
+		tokens: stats.tokens.total,
+		cost: stats.cost,
+		context: contextBreakdown(session.agent.state.messages, session.systemPrompt, stats.contextUsage?.tokens),
+	};
+}
+
 function sessionState(): WebSnapshot {
 	const models = session?.modelRuntime.getAvailableSnapshot() ?? [];
 	const thinkingLevels = session?.getAvailableThinkingLevels() ?? [];
+	const sessionStats = sessionStatsView();
 	return {
 		messages: session?.agent.state.messages ?? [],
 		...sessionDelta(),
@@ -368,6 +498,7 @@ function sessionState(): WebSnapshot {
 			contextWindow: model.contextWindow,
 		})),
 		thinkingLevels,
+		...(sessionStats ? { sessionStats } : {}),
 	};
 }
 
@@ -709,11 +840,62 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 		return;
 	}
 
+	if (url.pathname === "/api/files" && request.method === "GET") {
+		try {
+			const files = await searchProjectFiles(
+				cwd,
+				url.searchParams.get("q") ?? "",
+				parseFileLimit(url.searchParams.get("limit")),
+			);
+			sendJson(response, 200, { files });
+		} catch (error) {
+			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
+		}
+		return;
+	}
+
 	if (url.pathname === "/api/usage" && request.method === "GET") {
 		try {
 			sendJson(response, 200, await projectUsage(parseUsageDays(url.searchParams.get("days"))));
 		} catch (error) {
 			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/settings" && request.method === "GET") {
+		if (!session) {
+			sendJson(response, 503, { error: "No active session" });
+			return;
+		}
+		sendJson(response, 200, settingsView(session.settingsManager));
+		return;
+	}
+
+	if (url.pathname === "/api/settings" && request.method === "POST") {
+		if (sessionOperation) {
+			sendJson(response, 409, { error: "A session transition is already running" });
+			return;
+		}
+		if (!session) {
+			sendJson(response, 503, { error: "No active session" });
+			return;
+		}
+		let body: Record<string, unknown>;
+		try {
+			body = await readBody(request);
+		} catch (error) {
+			const status = error instanceof HttpRequestError ? error.status : 400;
+			sendJson(response, status, { error: error instanceof Error ? error.message : String(error) });
+			return;
+		}
+		try {
+			applySettingsPatch(session.settingsManager, body);
+			await session.settingsManager.flush();
+			sendJson(response, 200, settingsView(session.settingsManager));
+		} catch (error) {
+			const status = error instanceof HttpRequestError ? error.status : 500;
+			sendJson(response, status, { error: error instanceof Error ? error.message : String(error) });
 		}
 		return;
 	}
@@ -735,12 +917,12 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			return;
 		}
 		if (gitState.state !== "ready" || !gitState.root) {
-			sendJson(response, 409, { error: "Git 状态不可用" });
+			sendJson(response, 409, { error: "Git status is unavailable" });
 			return;
 		}
 		const file = gitState.files.find((entry) => entry.path === filePath);
 		if (!file) {
-			sendJson(response, 404, { error: "文件不在当前变更列表" });
+			sendJson(response, 404, { error: "File is not in the current change list" });
 			return;
 		}
 		const { diff, truncated } = await readGitDiff(gitState.root, filePath, file.code === "??");
@@ -774,7 +956,7 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 		}
 		if (activePrompt || activeSession.isStreaming) {
 			if (aborting) {
-				sendJson(response, 409, { error: "正在停止当前任务" });
+				sendJson(response, 409, { error: "Stopping the current task" });
 				return;
 			}
 			// Queue the message after the running turn instead of rejecting it (pi's follow-up semantics).
@@ -787,7 +969,7 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			return;
 		}
 		if (aborting) {
-			sendJson(response, 409, { error: "正在停止当前任务" });
+			sendJson(response, 409, { error: "Stopping the current task" });
 			return;
 		}
 		promptError = undefined;

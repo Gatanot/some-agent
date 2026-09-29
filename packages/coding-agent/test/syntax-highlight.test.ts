@@ -99,7 +99,7 @@ describe("theme syntax highlighting", () => {
 	it("colors diff additions and deletions in fenced diff blocks", () => {
 		const lines = highlightCode("-old\n+new\n", "diff");
 
-		expect(lines[0]).toBe("\x1b[38;2;204;102;102m-old\x1b[39m");
+		expect(lines[0]).toBe("\x1b[38;2;209;105;105m-old\x1b[39m");
 		expect(lines[1]).toBe("\x1b[38;2;181;189;104m+new\x1b[39m");
 	});
 

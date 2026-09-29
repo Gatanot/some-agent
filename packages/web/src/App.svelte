@@ -74,7 +74,7 @@
 	let sessionSearching = false;
 	let sessionSearchRequest = 0;
 	let sessionSearchTimer: ReturnType<typeof setTimeout> | undefined;
-	let inspectorTab: "changes" | "usage" = "changes";
+	let inspectorTab: "changes" | "usage" = "usage";
 	let connectionStatus: "connecting" | "connected" | "disconnected" = "connecting";
 	let eventStream: EventSource | undefined;
 	let draftValue = "";

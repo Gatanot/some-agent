@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ArrowUp, CircleStop } from "@lucide/svelte";
+	import { onMount } from "svelte";
 	import { applyMention, matchMention, type MentionMatch } from "../mentions.ts";
 	import type { AppState, ModelOption } from "../types.ts";
 
@@ -11,13 +12,24 @@
 	export let onModelChange: (value: string) => void;
 	export let onThinkingChange: (level: string) => void;
 	export let onFileSearch: (query: string) => Promise<string[]>;
+	export let onHeightChange: (height: number) => void = () => {};
 
+	let footerElement: HTMLElement;
 	let textareaElement: HTMLTextAreaElement;
 	let mention: MentionMatch | undefined;
 	let suggestions: string[] = [];
 	let suggestionIndex = 0;
 	let mentionRequest = 0;
 	let mentionTimer: ReturnType<typeof setTimeout> | undefined;
+
+	onMount(() => {
+		// Fractional height keeps the min-height subtraction sub-pixel exact; offsetHeight would round.
+		const measure = () => onHeightChange(footerElement.getBoundingClientRect().height);
+		const observer = new ResizeObserver(() => measure());
+		observer.observe(footerElement);
+		measure();
+		return () => observer.disconnect();
+	});
 
 	function modelKey(model: ModelOption): string {
 		return JSON.stringify([model.provider, model.id]);
@@ -133,7 +145,7 @@
 	}
 </script>
 
-<footer class="composer">
+<footer class="composer" bind:this={footerElement}>
 	<div class="composer-inner">
 		<div class="composer-box">
 			{#if mention && suggestions.length > 0}

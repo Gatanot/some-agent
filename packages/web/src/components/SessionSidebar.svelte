@@ -64,21 +64,19 @@
 
 <aside class="sidebar" aria-label="Session navigation">
 	<div class="sidebar-head">
-		<button class="workspace-select" type="button" title={cwd} aria-haspopup="dialog" aria-expanded={workspaceOpen} on:click={() => (workspaceOpen = true)}>
-			<FolderOpen size={15} />
-			<span class="workspace-select-name">{cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? "工作空间"}</span>
-			<ChevronDown size={14} />
+		<button class="workspace-chip" type="button" title={cwd} aria-haspopup="dialog" aria-expanded={workspaceOpen} on:click={() => (workspaceOpen = true)}>
+			<FolderOpen size={13} />
+			<span class="workspace-chip-name">{cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? "工作空间"}</span>
+			<ChevronDown size={12} />
 		</button>
-		<div class="search-row">
-			<div class="search-wrap">
-				<Search size={15} aria-hidden="true" />
-				<label class="visually-hidden" for="session-search">Search sessions</label>
-				<input id="session-search" class="session-search" type="search" bind:value={query} placeholder="Search titles and transcripts" />
-			</div>
-			<button class="icon-button new-session-button" type="button" aria-label="New session" title="New session" disabled={newSessionDisabled} on:click={onNewSession}>
-				<Plus size={16} strokeWidth={1.9} />
-			</button>
+		<div class="search-wrap">
+			<Search size={14} aria-hidden="true" />
+			<label class="visually-hidden" for="session-search">Search sessions</label>
+			<input id="session-search" class="session-search" type="search" bind:value={query} placeholder="Search" />
 		</div>
+		<button class="icon-button new-session-button" type="button" aria-label="New session" title="New session" disabled={newSessionDisabled} on:click={onNewSession}>
+			<Plus size={16} strokeWidth={1.9} />
+		</button>
 	</div>
 
 	<nav class="session-list" aria-label="Session history">

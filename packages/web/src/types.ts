@@ -1,4 +1,3 @@
-export type LayoutName = "sidebar" | "drawer";
 export type ToolStatus = "done" | "running" | "error";
 export type NoticeKind = "empty" | "history" | "error" | "warning";
 export type PhaseTone = "idle" | "running" | "compacting" | "error" | "disconnected";

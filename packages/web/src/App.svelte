@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
-	import { PanelRightOpen, Pencil, Settings as SettingsIcon, X } from "@lucide/svelte";
+	import { Pencil, Settings as SettingsIcon, X } from "@lucide/svelte";
 	import Composer from "./components/Composer.svelte";
 	import Inspector from "./components/Inspector.svelte";
 	import SessionSidebar from "./components/SessionSidebar.svelte";
@@ -9,6 +9,7 @@
 	import { lastUserPromptText, snapshotToAppState } from "./live.ts";
 	import type { WebEventEnvelope, WebGitDiff, WebSessionMatch, WebSessionSearchResponse, WebSessionSummary, WebSessionsResponse, WebSnapshot } from "./protocol.ts";
 	import type { AppState } from "./types.ts";
+	import { clearWorkspaceId, getWorkspaceId, setWorkspaceId, workspaceEventUrl, workspaceFetch } from "./workspace.ts";
 
 	const themeStorageKey = "orrery.theme";
 	const themeColors = { light: "#f4f5f7", dark: "#17191c" } as const;
@@ -60,7 +61,8 @@
 		applyTheme(theme);
 	}
 
-	let inspectorOpen = false;
+	let workspacePaths: string[] = [];
+	let uiError = "";
 	let settingsOpen = false;
 	let pendingDelete: { id: string; title: string } | undefined = undefined;
 	let serverSnapshot: WebSnapshot | undefined;
@@ -158,11 +160,12 @@
 	}
 
 	function logNotice(message: string): void {
+		uiError = message;
 		console.warn(`[orrery-web] ${message}`);
 	}
 
 	async function searchFiles(query: string): Promise<string[]> {
-		const response = await fetch(`/api/files?q=${encodeURIComponent(query)}`);
+		const response = await workspaceFetch(`/api/files?q=${encodeURIComponent(query)}`);
 		const payload = (await response.json().catch(() => ({}))) as { files?: string[]; error?: string };
 		if (!response.ok) throw new Error(payload.error ?? `File search failed (${response.status})`);
 		return payload.files ?? [];
@@ -178,7 +181,6 @@
 			pendingDelete = undefined;
 			return;
 		}
-		inspectorOpen = false;
 		settingsOpen = false;
 	}
 
@@ -212,7 +214,7 @@
 	function connectEvents(): void {
 		eventStream?.close();
 		connectionStatus = "connecting";
-		const source = new EventSource("/events");
+		const source = new EventSource(workspaceEventUrl("/events"));
 		eventStream = source;
 		source.onopen = () => {
 			if (eventStream === source) connectionStatus = "connected";
@@ -223,10 +225,53 @@
 		source.addEventListener("snapshot", receiveServerEvent);
 		source.addEventListener("update", receiveServerEvent);
 		void loadSessions();
+		void loadWorkspaces();
+	}
+
+	async function ensureWorkspace(): Promise<void> {
+		if (getWorkspaceId()) {
+			try {
+				const response = await workspaceFetch("/api/workspaces");
+				if (response.ok) return;
+			} catch {
+				// Fall through and try to create a fresh workspace.
+			}
+			clearWorkspaceId();
+		}
+		const created = await fetch("/api/workspaces", { method: "POST" });
+		const payload = (await created.json().catch(() => ({}))) as { id?: string; error?: string };
+		if (!created.ok || !payload.id) throw new Error(payload.error ?? `无法创建工作空间 (${created.status})`);
+		setWorkspaceId(payload.id);
+	}
+
+	async function loadWorkspaces(): Promise<void> {
+		try {
+			const response = await workspaceFetch("/api/workspaces");
+			const payload = (await response.json()) as { recent?: string[]; error?: string };
+			if (!response.ok) throw new Error(payload.error ?? "无法读取工作空间");
+			workspacePaths = payload.recent ?? [];
+		} catch (error) {
+			uiError = error instanceof Error ? error.message : String(error);
+		}
+	}
+
+	async function selectWorkspace(path: string): Promise<void> {
+		if (!path || path === serverSnapshot?.cwd) return;
+		try {
+			uiError = "";
+			await postJson("/api/workspace/select", { path });
+			sessionSummaries = [];
+			sessionMatches = [];
+			sessionSearchRequest += 1;
+			usageRefreshToken += 1;
+			await Promise.all([loadWorkspaces(), loadSessions()]);
+		} catch (error) {
+			uiError = error instanceof Error ? error.message : String(error);
+		}
 	}
 
 	async function postJson(path: string, body?: Record<string, unknown>): Promise<void> {
-		const response = await fetch(path, {
+		const response = await workspaceFetch(path, {
 			method: "POST",
 			headers: body ? { "content-type": "application/json" } : undefined,
 			body: body ? JSON.stringify(body) : undefined,
@@ -238,7 +283,7 @@
 	async function loadSessions(): Promise<void> {
 		const requestId = ++sessionListRequest;
 		try {
-			const response = await fetch("/api/sessions");
+			const response = await workspaceFetch("/api/sessions");
 			const payload = (await response.json()) as WebSessionsResponse & { error?: string };
 			if (!response.ok) throw new Error(payload.error ?? `Failed to load sessions (${response.status})`);
 			if (requestId === sessionListRequest) sessionSummaries = payload.sessions;
@@ -266,7 +311,7 @@
 	async function runSessionSearch(query: string): Promise<void> {
 		const requestId = ++sessionSearchRequest;
 		try {
-			const response = await fetch(`/api/sessions/search?q=${encodeURIComponent(query)}`);
+			const response = await workspaceFetch(`/api/sessions/search?q=${encodeURIComponent(query)}`);
 			const payload = (await response.json()) as WebSessionSearchResponse & { error?: string };
 			if (!response.ok) throw new Error(payload.error ?? `Search failed (${response.status})`);
 			if (requestId === sessionSearchRequest) sessionMatches = payload.matches;
@@ -321,7 +366,6 @@
 		try {
 			await postJson("/api/new");
 			draftBySession = new Map(draftBySession);
-			logNotice("Created a new session");
 		} catch (error) {
 			logNotice(error instanceof Error ? error.message : String(error));
 		}
@@ -381,7 +425,7 @@
 	}
 
 	async function loadGitDiff(path: string): Promise<WebGitDiff> {
-		const response = await fetch(`/api/git/diff?path=${encodeURIComponent(path)}`);
+		const response = await workspaceFetch(`/api/git/diff?path=${encodeURIComponent(path)}`);
 		const payload = (await response.json().catch(() => ({}))) as {
 			path?: string;
 			diff?: string;
@@ -412,8 +456,15 @@
 		applyTheme(theme);
 		const themeMedia = window.matchMedia("(prefers-color-scheme: light)");
 		themeMedia.addEventListener("change", handleSystemThemeChange);
-		connectEvents();
-		void loadSessions();
+		void (async () => {
+			try {
+				await ensureWorkspace();
+			} catch (error) {
+				uiError = error instanceof Error ? error.message : String(error);
+			}
+			connectEvents();
+			void loadSessions();
+		})();
 		return () => {
 			themeMedia.removeEventListener("change", handleSystemThemeChange);
 			if (snapshotFrame !== undefined) cancelAnimationFrame(snapshotFrame);
@@ -434,6 +485,9 @@
 <div class="prototype">
 		<main class="workspace">
 		<SessionSidebar
+			cwd={serverSnapshot?.cwd ?? ""}
+			workspaces={workspacePaths}
+			onWorkspaceSelect={selectWorkspace}
 			snapshot={serverSnapshot}
 			sessions={sessionSummaries}
 			matches={sessionMatches}
@@ -450,8 +504,9 @@
 					<div class="session-title-line"><h1 class="current-title" title={state.title}>{state.title}</h1>{#if serverSnapshot?.ready}<button class="icon-button rename-button" type="button" aria-label="Rename session" title="Rename session" disabled={sessionNameEditing} on:click={renameSession}><Pencil size={14} /></button>{/if}</div>
 					<div class="session-facts"><span class={`run-status ${state.phaseTone}`} aria-live="polite"><span class="status-dot" aria-hidden="true"></span>{state.phaseLabel}</span>{#if state.sessionId}<span class="session-id" title={state.sessionId}>ID {state.sessionId.slice(0, 8)}</span>{/if}<span>{state.messages.length} messages</span></div>
 				</div>
-				<div class="toolbar-actions"><button class="icon-button" type="button" aria-label="Open settings" title="Open settings" aria-expanded={settingsOpen} on:click={() => (settingsOpen = true)}><SettingsIcon size={17} /></button><button class="icon-button inspector-trigger" type="button" aria-label="Open inspector" title="Open inspector" aria-expanded={inspectorOpen} on:click={() => { inspectorOpen = !inspectorOpen; }}><PanelRightOpen size={17} /></button></div>
+				<div class="toolbar-actions"><button class="icon-button settings-trigger" type="button" aria-label="打开设置" title="打开设置" aria-expanded={settingsOpen} on:click={() => (settingsOpen = true)}><SettingsIcon size={17} /></button></div>
 			</header>
+			{#if uiError}<div class="ui-error" role="alert"><span>{uiError}</span><button class="icon-button" type="button" aria-label="关闭提示" on:click={() => (uiError = "")}><X size={15} /></button></div>{/if}
 			<Timeline state={state} onNoticeAction={noticeAction} onCopy={copyText} onReconnect={connectEvents} />
 			<Composer
 				state={state}
@@ -464,9 +519,8 @@
 				onFileSearch={searchFiles}
 			/>
 		</section>
-		{#if inspectorOpen}<button class="inspector-backdrop" type="button" aria-label="Close inspector" on:click={() => (inspectorOpen = false)}></button>{/if}
-		<Inspector state={state} snapshot={serverSnapshot} activeTab={inspectorTab} open={inspectorOpen} {connectionStatus} {theme} {themeActionLabel} onToggleTheme={toggleTheme} onClose={() => (inspectorOpen = false)} onTabSelect={selectInspectorTab} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} usageRefresh={usageRefreshToken} />
-		<Settings open={settingsOpen} models={state.models} onClose={() => (settingsOpen = false)} />
+		<Inspector state={state} snapshot={serverSnapshot} activeTab={inspectorTab} {connectionStatus} {theme} {themeActionLabel} onToggleTheme={toggleTheme} onTabSelect={selectInspectorTab} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} usageRefresh={usageRefreshToken} />
+		<Settings open={settingsOpen} onClose={() => (settingsOpen = false)} />
 		{#if pendingDelete}
 			<button class="confirm-backdrop" type="button" aria-label="Cancel session deletion" on:click={() => (pendingDelete = undefined)}></button>
 			<div class="confirm-panel" role="alertdialog" aria-modal="true" aria-labelledby="confirm-delete-title" aria-describedby="confirm-delete-text">

@@ -127,6 +127,7 @@ export interface WebSettings {
 	defaultModel?: string;
 	defaultThinkingLevel?: string;
 	modelThinkingLevels: WebSettingsModelThinkingLevel[];
+	enabledModels?: string[];
 	compaction: { enabled: boolean; reserveTokens: number; keepRecentTokens: number };
 	steeringMode: "all" | "one-at-a-time";
 	followUpMode: "all" | "one-at-a-time";
@@ -137,6 +138,7 @@ export type WebSettingsPatch = Partial<{
 	defaultModel: { provider: string; id: string } | null;
 	defaultThinkingLevel: string | null;
 	modelThinkingLevels: WebSettingsModelThinkingLevel[];
+	enabledModels: string[];
 	compactionEnabled: boolean;
 	compactionReserveTokens: number;
 	compactionKeepRecentTokens: number;

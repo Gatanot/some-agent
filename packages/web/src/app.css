@@ -202,7 +202,7 @@ button:disabled { cursor: default; opacity: .48; }
 .settings-trigger { border-color: transparent; }
 
 .timeline-wrap { position: relative; min-height: 0; overflow: hidden; background: var(--canvas); }
-.timeline { height: 100%; padding: 28px clamp(18px, 3vw, 48px) 38px; overflow-y: auto; scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
+.timeline { height: 100%; padding: 28px clamp(18px, 3vw, 48px) 64px; overflow-y: auto; scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
 .timeline-inner { width: min(820px, 100%); margin: 0 auto; }
 .message { min-width: 0; margin-bottom: 28px; }
 .message-content { min-width: 0; color: var(--text); font-size: 13px; line-height: 1.7; }
@@ -365,7 +365,7 @@ pre { margin: 0; padding: 11px; overflow-x: auto; color: var(--code-text); font-
 .usage-model-value { color: var(--text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 11px; white-space: nowrap; }
 .usage-model-value small { margin-left: 7px; color: var(--text-subtle); font-size: 10px; }
 
-.composer { padding: 17px 24px 21px; background: color-mix(in srgb, var(--surface) 94%, var(--canvas)); }
+.composer { padding: 17px 24px 21px; background: var(--canvas); }
 .composer-inner { width: min(820px, 100%); margin: 0 auto; }
 .composer-controls, .composer-selects, .composer-actions { display: flex; min-width: 0; align-items: center; }
 .composer-box { position: relative; padding: 13px 14px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: 0 8px 24px var(--shadow); }

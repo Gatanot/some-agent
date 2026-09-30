@@ -502,7 +502,7 @@
 			<header class="session-bar">
 				<div class="session-title-block">
 					<div class="session-title-line"><h1 class="current-title" title={state.title}>{state.title}</h1>{#if serverSnapshot?.ready}<button class="icon-button rename-button" type="button" aria-label="Rename session" title="Rename session" disabled={sessionNameEditing} on:click={renameSession}><Pencil size={14} /></button>{/if}</div>
-					<div class="session-facts"><span class={`run-status ${state.phaseTone}`} aria-live="polite"><span class="status-dot" aria-hidden="true"></span>{state.phaseLabel}</span>{#if state.sessionId}<span class="session-id" title={state.sessionId}>ID {state.sessionId.slice(0, 8)}</span>{/if}<span>{state.messages.length} messages</span></div>
+					<div class="session-facts"><span class={`run-status ${state.phaseTone}`} aria-live="polite" title={state.sessionId || undefined}><span class="status-dot" aria-hidden="true"></span>{state.phaseLabel}</span><span>{state.messages.length} messages</span></div>
 				</div>
 				<div class="toolbar-actions"><button class="icon-button settings-trigger" type="button" aria-label="打开设置" title="打开设置" aria-expanded={settingsOpen} on:click={() => (settingsOpen = true)}><SettingsIcon size={17} /></button></div>
 			</header>
@@ -519,7 +519,7 @@
 				onFileSearch={searchFiles}
 			/>
 		</section>
-		<Inspector state={state} snapshot={serverSnapshot} activeTab={inspectorTab} {connectionStatus} {theme} {themeActionLabel} onToggleTheme={toggleTheme} onTabSelect={selectInspectorTab} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} usageRefresh={usageRefreshToken} />
+		<Inspector state={state} snapshot={serverSnapshot} activeTab={inspectorTab} {theme} {themeActionLabel} onToggleTheme={toggleTheme} onTabSelect={selectInspectorTab} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} usageRefresh={usageRefreshToken} />
 		<Settings open={settingsOpen} onClose={() => (settingsOpen = false)} />
 		{#if pendingDelete}
 			<button class="confirm-backdrop" type="button" aria-label="Cancel session deletion" on:click={() => (pendingDelete = undefined)}></button>

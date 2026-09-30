@@ -85,6 +85,7 @@
 	let sessionNameEditing = false;
 	let usageRefreshToken = 0;
 	let state: AppState;
+	let composerHeight = 0;
 
 	function loadingState(): AppState {
 		return {
@@ -498,7 +499,7 @@
 			onNewSession={newSession}
 			newSessionDisabled={state.phase === "running" || state.phase === "stopping"}
 		/>
-		<section class="main-panel" aria-label="Session workspace">
+		<section class="main-panel" aria-label="Session workspace" style={`--composer-height: ${composerHeight}px`}>
 			<header class="session-bar">
 				<div class="session-title-block">
 					<div class="session-title-line"><h1 class="current-title" title={state.title}>{state.title}</h1>{#if serverSnapshot?.ready}<button class="icon-button rename-button" type="button" aria-label="Rename session" title="Rename session" disabled={sessionNameEditing} on:click={renameSession}><Pencil size={14} /></button>{/if}</div>
@@ -517,6 +518,7 @@
 					onModelChange={changeModel}
 					onThinkingChange={changeThinkingLevel}
 					onFileSearch={searchFiles}
+					onHeightChange={(height) => (composerHeight = height)}
 				/>
 			</Timeline>
 		</section>

@@ -1,12 +1,12 @@
 {
 	"name": "@gatanot/orrery",
-	"version": "0.2.2",
+	"version": "0.2.3",
 	"lockfileVersion": 3,
 	"requires": true,
 	"packages": {
 		"": {
 			"name": "@gatanot/orrery",
-			"version": "0.2.2",
+			"version": "0.2.3",
 			"license": "MIT",
 			"dependencies": {
 				"@silvia-odwyer/photon-node": "0.3.4",
@@ -24,7 +24,7 @@
 				"typebox": "1.3.7",
 				"undici": "8.9.0",
 				"yaml": "2.9.0",
-				"@gatanot/orrery-tui": "0.2.2",
+				"@gatanot/orrery-tui": "0.2.3",
 				"@earendil-works/pi-agent-core": "0.84.4",
 				"@earendil-works/pi-ai": "0.84.4",
 				"@earendil-works/pi-client": "0.84.4",
@@ -548,8 +548,8 @@
 			}
 		},
 		"node_modules/@gatanot/orrery-tui": {
-			"version": "0.2.2",
-			"resolved": "https://registry.npmjs.org/@gatanot/orrery-tui/-/orrery-tui-0.2.2.tgz",
+			"version": "0.2.3",
+			"resolved": "https://registry.npmjs.org/@gatanot/orrery-tui/-/orrery-tui-0.2.3.tgz",
 			"license": "MIT",
 			"dependencies": {
 				"get-east-asian-width": "1.6.0",

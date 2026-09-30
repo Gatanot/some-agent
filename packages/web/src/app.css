@@ -153,6 +153,8 @@ button:disabled { cursor: default; opacity: .48; }
 .workspace-chip svg { flex: 0 0 auto; }
 .workspace-chip-name { overflow: hidden; font-size: 11px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .sidebar-head .search-wrap { flex: 1; min-width: 0; }
+.sidebar-foot { flex: 0 0 auto; padding: 10px 10px; border-top: 1px solid var(--line); }
+.sidebar-foot .workspace-select { margin-bottom: 0; }
 
 .search-row { display: flex; min-width: 0; align-items: center; gap: 8px; }
 .search-row .search-wrap { flex: 1; min-width: 0; }

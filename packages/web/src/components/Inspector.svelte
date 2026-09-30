@@ -14,7 +14,6 @@
 	export let onTabSelect: (tab: InspectorTab) => void;
 	export let onRefreshGit: () => void;
 	export let onGitDiff: (path: string) => Promise<WebGitDiff>;
-	export let connectionStatus: "connecting" | "connected" | "disconnected";
 	export let theme: "light" | "dark";
 	export let themeActionLabel: string;
 	export let onToggleTheme: () => void;
@@ -186,21 +185,19 @@
 </script>
 
 <aside class="inspector" aria-label="Project inspector">
-	<div class="inspector-heading">
-		<span>Project</span>
-		<div class="inspector-actions">
-			<span class:offline={connectionStatus === "disconnected"} class="connection-chip"><span class="status-dot" aria-hidden="true"></span>{connectionStatus === "connected" ? "Connected" : connectionStatus === "connecting" ? "Connecting" : "Disconnected"}</span>
+	<div class="inspector-tabs">
+		<div role="tablist" aria-label="Project inspector" class="inspector-tab-list">
+			<button id="inspector-tab-changes" class:active={activeTab === "changes"} type="button" role="tab" aria-selected={activeTab === "changes"} aria-controls="inspector-body" tabindex={activeTab === "changes" ? 0 : -1} on:click={() => selectTab("changes")} on:keydown={(event) => handleTabKeydown(event, "changes")}>
+				<FileDiff size={16} strokeWidth={1.8} aria-hidden="true" /><span>Git</span>{#if git.state === "ready"}<small>{git.files.length}</small>{/if}
+			</button>
+			<button id="inspector-tab-usage" class:active={activeTab === "usage"} type="button" role="tab" aria-selected={activeTab === "usage"} aria-controls="inspector-body" tabindex={activeTab === "usage" ? 0 : -1} on:click={() => selectTab("usage")} on:keydown={(event) => handleTabKeydown(event, "usage")}>
+				<ChartColumn size={16} strokeWidth={1.8} aria-hidden="true" /><span>Usage</span>
+			</button>
+		</div>
+		<div class="inspector-tab-actions">
 			<button class="icon-button theme-toggle" type="button" aria-label={themeActionLabel} title={themeActionLabel} on:click={onToggleTheme}>{#if theme === "light"}<Moon size={15} />{:else}<Sun size={15} />{/if}</button>
 			{#if activeTab === "changes"}<button class="icon-button" type="button" aria-label="Refresh Git status" title="Refresh Git status" disabled={git.state === "loading" || state.phase === "running"} on:click={onRefreshGit}><RotateCw size={15} /></button>{:else if activeTab === "usage"}<button class="icon-button" type="button" aria-label="Refresh usage" title="Refresh usage" disabled={usageLoading} on:click={loadUsage}><RotateCw size={15} /></button>{/if}
 		</div>
-	</div>
-	<div class="inspector-tabs" role="tablist" aria-label="Project inspector">
-		<button id="inspector-tab-changes" class:active={activeTab === "changes"} type="button" role="tab" aria-selected={activeTab === "changes"} aria-controls="inspector-body" tabindex={activeTab === "changes" ? 0 : -1} on:click={() => selectTab("changes")} on:keydown={(event) => handleTabKeydown(event, "changes")}>
-			<FileDiff size={16} strokeWidth={1.8} aria-hidden="true" /><span>Git</span>{#if git.state === "ready"}<small>{git.files.length}</small>{/if}
-		</button>
-		<button id="inspector-tab-usage" class:active={activeTab === "usage"} type="button" role="tab" aria-selected={activeTab === "usage"} aria-controls="inspector-body" tabindex={activeTab === "usage" ? 0 : -1} on:click={() => selectTab("usage")} on:keydown={(event) => handleTabKeydown(event, "usage")}>
-			<ChartColumn size={16} strokeWidth={1.8} aria-hidden="true" /><span>Usage</span>
-		</button>
 	</div>
 
 	<div class="inspector-body" id="inspector-body" role="tabpanel" aria-labelledby={`inspector-tab-${activeTab}`}>

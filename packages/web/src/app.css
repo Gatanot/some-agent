@@ -232,7 +232,7 @@ button:disabled { cursor: default; opacity: .48; }
 .thinking-label { color: var(--warning); font-size: 12px; }
 .thinking-content { padding: 0 12px 12px; color: var(--text-muted); font-size: 12px; }
 .code-block { margin: 14px 0; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--code-bg); box-shadow: var(--shadow-soft); }
-.output-block pre { max-height: 420px; overflow: auto; }
+.output-block pre { overflow-x: auto; }
 .output-note { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 11px; border-top: 1px solid var(--line); color: var(--text-subtle); font-size: 11px; }
 .output-toggle { min-height: 26px; padding: 2px 9px; font-size: 11px; }
 .code-head { display: flex; min-height: 30px; align-items: center; justify-content: space-between; padding: 0 8px 0 11px; border-bottom: 1px solid var(--line); color: var(--text-subtle); font-size: 11px; }
@@ -265,7 +265,7 @@ pre { margin: 0; padding: 11px; overflow-x: auto; color: var(--code-text); font-
 .tool-status.running { color: var(--accent); }
 .tool-status.error { color: var(--danger); }
 .tool-detail { color: var(--text-muted); font-size: 11px; }
-.tool-detail pre { max-height: 320px; padding: 3px 0 0; overflow: auto; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tool-detail pre { max-height: none; padding: 3px 0 0; overflow-x: auto; font-size: 11px; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tool-image-count { display: inline-flex; align-items: center; gap: 4px; color: var(--text-subtle); font-size: 10px; }
 .tool-images { display: grid; gap: 8px; margin-top: 8px; }
 .tool-image { display: grid; gap: 4px; margin: 0; }

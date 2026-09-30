@@ -507,17 +507,18 @@
 				<div class="toolbar-actions"><button class="icon-button settings-trigger" type="button" aria-label="打开设置" title="打开设置" aria-expanded={settingsOpen} on:click={() => (settingsOpen = true)}><SettingsIcon size={17} /></button></div>
 			</header>
 			{#if uiError}<div class="ui-error" role="alert"><span>{uiError}</span><button class="icon-button" type="button" aria-label="关闭提示" on:click={() => (uiError = "")}><X size={15} /></button></div>{/if}
-			<Timeline state={state} onNoticeAction={noticeAction} onCopy={copyText} onReconnect={connectEvents} />
-			<Composer
-				state={state}
-				draft={draftValue}
-				onDraftChange={updateDraft}
-				onSend={startPrompt}
-				onStop={stopPrompt}
-				onModelChange={changeModel}
-				onThinkingChange={changeThinkingLevel}
-				onFileSearch={searchFiles}
-			/>
+			<Timeline state={state} onNoticeAction={noticeAction} onCopy={copyText} onReconnect={connectEvents}>
+				<Composer
+					state={state}
+					draft={draftValue}
+					onDraftChange={updateDraft}
+					onSend={startPrompt}
+					onStop={stopPrompt}
+					onModelChange={changeModel}
+					onThinkingChange={changeThinkingLevel}
+					onFileSearch={searchFiles}
+				/>
+			</Timeline>
 		</section>
 		<Inspector state={state} snapshot={serverSnapshot} activeTab={inspectorTab} {theme} {themeActionLabel} onToggleTheme={toggleTheme} onTabSelect={selectInspectorTab} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} usageRefresh={usageRefreshToken} />
 		<Settings open={settingsOpen} onClose={() => (settingsOpen = false)} />

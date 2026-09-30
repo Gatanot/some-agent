@@ -530,7 +530,7 @@
 					<button class="icon-button" type="button" aria-label="Cancel session deletion" title="Cancel" on:click={() => (pendingDelete = undefined)}><X size={17} /></button>
 				</header>
 				<div class="confirm-body">
-					<p class="confirm-text" id="confirm-delete-text">Delete session “{pendingDelete.title}”? This also removes its usage history from project totals.</p>
+					<p class="confirm-text" id="confirm-delete-text">Delete “{pendingDelete.title.length > 48 ? pendingDelete.title.slice(0, 48) + … : pendingDelete.title}”? This also removes its usage history from project totals.</p>
 					<div class="confirm-actions">
 						<button class="secondary-button" type="button" on:click={() => (pendingDelete = undefined)}>Cancel</button>
 						<button class="danger-button" type="button" on:click={confirmDeleteSession}>Delete session</button>

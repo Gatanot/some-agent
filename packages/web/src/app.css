@@ -202,8 +202,8 @@ button:disabled { cursor: default; opacity: .48; }
 .settings-trigger { border-color: transparent; }
 
 .timeline-wrap { position: relative; min-height: 0; overflow-y: auto; background: var(--canvas); scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
-.timeline { padding: 28px clamp(18px, 3vw, 48px) 16px; }
-.timeline-inner { width: min(820px, 100%); margin: 0 auto; }
+.timeline { display: flex; flex-direction: column; min-height: 100%; padding: 28px clamp(18px, 3vw, 48px) 16px; }
+.timeline-inner { width: min(820px, 100%); flex: 1; margin: 0 auto; }
 .message { min-width: 0; margin-bottom: 28px; }
 .message-content { min-width: 0; color: var(--text); font-size: 13px; line-height: 1.7; }
 .message.user .message-content { padding: 13px 16px; border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--surface-raised) 94%, var(--accent) 6%); box-shadow: 0 2px 8px var(--shadow); }
@@ -384,12 +384,13 @@ select { min-width: 0; max-width: none; height: 28px; padding: 2px 7px; border: 
 select:disabled { opacity: .65; }
 .composer-button { min-width: 78px; height: 32px; }
 .composer-button.send-button { min-width: 36px; width: 36px; padding: 0; }
-.settings-backdrop, .confirm-backdrop { position: fixed; z-index: 20; inset: 0; border-radius: 0; background: var(--backdrop); }
+.settings-backdrop, .confirm-backdrop { position: fixed; z-index: 20; inset: 0; border-radius: 0; background: color-mix(in srgb, var(--backdrop) 70%, transparent); }
 .settings-panel { position: fixed; z-index: 21; top: 50%; left: 50%; display: flex; width: min(640px, calc(100vw - 40px)); max-height: min(82vh, 760px); flex-direction: column; overflow: hidden; transform: translate(-50%, -50%); border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); box-shadow: 0 24px 60px var(--shadow); }
 .confirm-backdrop { z-index: 40; }
-.confirm-panel { position: fixed; z-index: 41; top: 50%; left: 50%; display: flex; width: min(440px, calc(100vw - 40px)); flex-direction: column; transform: translate(-50%, -50%); border: 1px solid var(--line-strong); border-radius: 10px; background: var(--surface); box-shadow: 0 24px 60px var(--shadow); }
+.confirm-panel { position: fixed; z-index: 41; top: 50%; left: 50%; display: flex; width: min(340px, calc(100vw - 40px)); flex-direction: column; transform: translate(-50%, -50%); border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); box-shadow: 0 12px 32px var(--shadow); }
 .confirm-body { display: grid; gap: 14px; padding: 16px 18px; }
-.confirm-text { margin: 0; color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+.confirm-text { margin: 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+.confirm-title { overflow: hidden; max-width: 100%; color: var(--text); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
 .confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
 .danger-button { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 32px; padding: 5px 12px; border: 1px solid var(--danger); border-radius: 4px; background: var(--danger); color: var(--on-accent); font-weight: 700; cursor: pointer; transition: filter .12s ease, transform .12s ease; }
 .danger-button:hover:not(:disabled) { filter: brightness(1.08); transform: translateY(-1px); }

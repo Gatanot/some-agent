@@ -54,7 +54,7 @@
 	});
 </script>
 
-<div class="timeline-wrap">
+<div class="timeline-wrap" bind:this={timelineElement} on:scroll={handleScroll}>
 	{#if state.phase === "compacting"}
 		<div class="compaction-banner" role="status" aria-live="polite">
 			<span class="compaction-spinner" aria-hidden="true"></span>
@@ -67,7 +67,7 @@
 			<button class="secondary-button" type="button" on:click={onReconnect}><RotateCw size={14} /> Reconnect</button>
 		</div>
 	{/if}
-	<div class="timeline" bind:this={timelineElement} tabindex="-1" role="region" aria-label="Message timeline" on:scroll={handleScroll}>
+	<div class="timeline" tabindex="-1" role="region" aria-label="Message timeline">
 		<div class="timeline-inner">
 			{#if state.notice}
 				<section class={`notice ${state.notice.kind}`}>
@@ -123,4 +123,5 @@
 			{/if}
 		</div>
 	</div>
+	<slot />
 </div>

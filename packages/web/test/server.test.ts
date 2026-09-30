@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import test from "node:test";
 import { TextDecoder } from "node:util";
 import {
@@ -793,6 +793,124 @@ test("searches sessions by title and transcript content", async () => {
 	}
 });
 
+test("browses directories for the workspace picker", async () => {
+	const fixture = await createFixture([fauxAssistantMessage("unused")]);
+	const parent = await mkdtemp(join(tmpdir(), "orrery-web-browse-"));
+	const child = join(parent, "child");
+	const file = join(parent, "note.txt");
+	await mkdir(child);
+	await mkdir(join(parent, ".hidden"));
+	await writeFile(file, "note\n");
+	try {
+		const listing = await request(fixture.baseUrl, `/api/workspace/browse?path=${encodeURIComponent(parent)}`);
+		assert.equal(listing.response.status, 200);
+		assert.equal(listing.body.path, parent);
+		assert.equal(listing.body.parent, dirname(parent));
+		const entries = listing.body.entries as { name: string; path: string }[];
+		assert.deepEqual(
+			entries.map((entry) => entry.name),
+			["child", ".hidden"],
+		);
+		assert.equal(entries[0]?.path, child);
+
+		const fallback = await request(fixture.baseUrl, "/api/workspace/browse");
+		assert.equal(fallback.response.status, 200);
+		assert.equal(fallback.body.path, fixture.cwd);
+
+		const notADirectory = await request(fixture.baseUrl, `/api/workspace/browse?path=${encodeURIComponent(file)}`);
+		assert.equal(notADirectory.response.status, 400);
+	} finally {
+		await fixture.close();
+		await rm(parent, { recursive: true, force: true });
+	}
+});
+
+test("switches workspaces and rejects invalid or busy transitions", async () => {
+	const fixture = await createFixture([fauxAssistantMessage("unused")]);
+	const next = await mkdtemp(join(tmpdir(), "orrery-web-next-"));
+	try {
+		const initial = await request(fixture.baseUrl, "/api/workspaces");
+		assert.equal(initial.body.current, fixture.cwd);
+		const invalid = await request(fixture.baseUrl, "/api/workspace/select", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ path: join(next, "missing") }),
+		});
+		assert.equal(invalid.response.status, 400);
+		assert.equal((await request(fixture.baseUrl, "/api/state")).body.cwd, fixture.cwd);
+		const switched = await request(fixture.baseUrl, "/api/workspace/select", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ path: next }),
+		});
+		assert.equal(switched.response.status, 200);
+		assert.equal((await request(fixture.baseUrl, "/api/state")).body.cwd, next);
+		assert.deepEqual((await request(fixture.baseUrl, "/api/workspaces")).body.recent, [next, fixture.cwd]);
+		const busyFixture = await createFixture([fauxAssistantMessage("unused")], [], { blockSelection: true });
+		try {
+			const selected = fetch(`${busyFixture.baseUrl}/api/session/select`, {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ id: busyFixture.sessions[1]?.sessionId }),
+			});
+			await busyFixture.selectionStarted;
+			const busy = await request(busyFixture.baseUrl, "/api/workspace/select", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ path: next }),
+			});
+			assert.equal(busy.response.status, 409);
+			busyFixture.releaseSelection?.();
+			await selected;
+		} finally {
+			busyFixture.releaseSelection?.();
+			await busyFixture.close();
+		}
+	} finally {
+		await fixture.close();
+		await rm(next, { recursive: true, force: true });
+	}
+});
+
+test("isolates per-workspace state and resolves a workspace from the query string", async () => {
+	const fixture = await createFixture([fauxAssistantMessage("unused")]);
+	const next = await mkdtemp(join(tmpdir(), "orrery-web-isolated-"));
+	try {
+		const created = await request(fixture.baseUrl, "/api/workspaces", { method: "POST" });
+		assert.equal(created.response.status, 200);
+		const id = created.body.id as string;
+		assert.ok(id);
+		const headers = { "x-orrery-workspace": id };
+		const deadline = Date.now() + 5_000;
+		while (Date.now() < deadline) {
+			const response = await fetch(`${fixture.baseUrl}/api/state`, { headers });
+			const snapshot = (await response.json()) as WebSnapshot;
+			if (snapshot.ready) break;
+			await new Promise((resolve) => setTimeout(resolve, 15));
+		}
+		const isolated = await request(fixture.baseUrl, "/api/state", { headers });
+		assert.equal(isolated.body.cwd, fixture.cwd);
+
+		const switched = await request(fixture.baseUrl, "/api/workspace/select", {
+			method: "POST",
+			headers: { ...headers, "content-type": "application/json" },
+			body: JSON.stringify({ path: next }),
+		});
+		assert.equal(switched.response.status, 200);
+		assert.equal((await request(fixture.baseUrl, "/api/state", { headers })).body.cwd, next);
+		assert.equal((await request(fixture.baseUrl, "/api/state")).body.cwd, fixture.cwd);
+		assert.equal((await request(fixture.baseUrl, `/api/state?workspace=${encodeURIComponent(id)}`)).body.cwd, next);
+
+		const unknown = await request(fixture.baseUrl, "/api/state", {
+			headers: { "x-orrery-workspace": "missing" },
+		});
+		assert.equal(unknown.response.status, 400);
+	} finally {
+		await fixture.close();
+		await rm(next, { recursive: true, force: true });
+	}
+});
+
 test("reads and updates pi settings", async () => {
 	const fixture = await createFixture([fauxAssistantMessage("unused")]);
 	try {
@@ -826,6 +944,23 @@ test("reads and updates pi settings", async () => {
 		assert.equal((updated.body.compaction as { enabled: boolean }).enabled, false);
 		assert.equal((updated.body.compaction as { reserveTokens: number }).reserveTokens, 4096);
 
+		const catalog = await request(fixture.baseUrl, "/api/models");
+		assert.ok((catalog.body.models as Array<{ id: string }>).some((model) => model.id === "web-test-2"));
+		const enabled = await request(fixture.baseUrl, "/api/settings", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ enabledModels: ["faux/web-test"] }),
+		});
+		assert.equal(enabled.response.status, 200);
+		assert.deepEqual(enabled.body.enabledModels, ["faux/web-test"]);
+		const state = await request(fixture.baseUrl, "/api/state");
+		assert.ok(!(state.body.models as Array<{ id: string }>).some((model) => model.id === "web-test-2"));
+		const unavailable = await request(fixture.baseUrl, "/api/session/model", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ provider: "faux", id: "web-test-2" }),
+		});
+		assert.equal(unavailable.response.status, 404);
 		const invalid = await request(fixture.baseUrl, "/api/settings", {
 			method: "POST",
 			headers: { "content-type": "application/json" },

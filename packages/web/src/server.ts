@@ -1,8 +1,11 @@
-import { readFile, stat, unlink } from "node:fs/promises";
+import { AsyncLocalStorage } from "node:async_hooks";
+import { randomUUID } from "node:crypto";
+import { readdir, readFile, stat, unlink } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { createRequire } from "node:module";
 import type { AddressInfo } from "node:net";
-import { extname, join, resolve, sep } from "node:path";
+import { homedir } from "node:os";
+import { dirname, extname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { AgentSession, AgentSessionEvent, SessionEntry, SessionInfo, SettingsManager } from "@gatanot/orrery";
 import { createAgentSession, SessionManager } from "@gatanot/orrery";
@@ -43,7 +46,7 @@ const distRoot = process.env.PI_WEB_ASSETS ? resolve(process.env.PI_WEB_ASSETS) 
 const pagePath = join(distRoot, "index.html");
 
 let port = configuredPort;
-let cwd = configuredCwd;
+let initialDirectory = configuredCwd;
 let isDevelopment = process.env.PI_WEB_MODE !== "production";
 const MAX_REQUEST_BYTES = 64 * 1024;
 const SSE_HEARTBEAT_MS = 15_000;
@@ -53,6 +56,63 @@ const MAX_USAGE_DAYS = 90;
 const DEFAULT_SEARCH_LIMIT = 50;
 const MAX_SEARCH_LIMIT = 200;
 const SNIPPET_CONTEXT = 60;
+const MAX_WORKSPACES = 8;
+const MAX_BROWSE_ENTRIES = 300;
+
+interface WorkspaceRuntime {
+	id: string;
+	cwd: string;
+	session?: AgentSession;
+	sessionError?: string;
+	promptError?: string;
+	activePrompt?: { session: AgentSession };
+	aborting: boolean;
+	compacting: boolean;
+	sessionOperation?: Promise<void>;
+	sequence: number;
+	gitRefreshId: number;
+	gitState: WebGitState;
+	activeToolExecutions: Map<string, WebToolExecution>;
+	sessionCatalog: Map<string, SessionInfo>;
+	usageCache: Map<string, { modified: number; since: number; summary: UsageSummary }>;
+	deletedSessionUsage: Map<string, SessionEntry[]>;
+	recentWorkspaces: string[];
+	lastUsed: number;
+	subscribers: Set<SseSubscriber>;
+}
+
+function createWorkspaceRuntime(id: string, directory: string): WorkspaceRuntime {
+	return {
+		id,
+		cwd: directory,
+		aborting: false,
+		compacting: false,
+		sequence: 0,
+		gitRefreshId: 0,
+		gitState: { state: "loading", files: [] },
+		activeToolExecutions: new Map(),
+		sessionCatalog: new Map(),
+		usageCache: new Map(),
+		deletedSessionUsage: new Map(),
+		recentWorkspaces: [directory],
+		lastUsed: Date.now(),
+		subscribers: new Set(),
+	};
+}
+
+const runtimeStorage = new AsyncLocalStorage<WorkspaceRuntime>();
+const workspaceRuntimes = new Map<string, WorkspaceRuntime>();
+let defaultRuntime: WorkspaceRuntime | undefined;
+
+/**
+ * Resolves the workspace runtime for the current request, or the server's default runtime when
+ * called outside a request context (startup, shutdown, and background session callbacks).
+ */
+function runtime(): WorkspaceRuntime {
+	const value = runtimeStorage.getStore() ?? defaultRuntime;
+	if (!value) throw new Error("Workspace runtime is unavailable");
+	return value;
+}
 
 interface SseSubscriber {
 	response: ServerResponse;
@@ -93,23 +153,46 @@ export interface WebServerHandle {
 
 let sessionFactory: SessionFactory | undefined;
 let sessionLister: SessionLister | undefined;
-let session: AgentSession | undefined;
-let sessionError: string | undefined;
-let promptError: string | undefined;
-let activePrompt: { session: AgentSession } | undefined;
-let aborting = false;
-let compacting = false;
-let sessionOperation: Promise<void> | undefined;
+let defaultWorkspaceId = "";
 let vite: ViteDevServer | undefined;
-let sequence = 0;
-let gitRefreshId = 0;
-let gitState: WebGitState = { state: "loading", files: [] };
-const activeToolExecutions = new Map<string, WebToolExecution>();
-const sessionCatalog = new Map<string, SessionInfo>();
-const usageCache = new Map<string, { modified: number; since: number; summary: UsageSummary }>();
-/** Usage entries retained by session ID after a session file is deleted. */
-const deletedSessionUsage = new Map<string, SessionEntry[]>();
-const subscribers = new Set<SseSubscriber>();
+
+function getWorkspace(id: string | undefined): WorkspaceRuntime {
+	if (!id) {
+		const fallback = workspaceRuntimes.get(defaultWorkspaceId);
+		if (!fallback) throw new HttpRequestError(503, "Workspace is not available");
+		return fallback;
+	}
+	const existing = workspaceRuntimes.get(id);
+	if (!existing) throw new HttpRequestError(400, "Workspace is not available");
+	existing.lastUsed = Date.now();
+	return existing;
+}
+
+/** Creates an isolated workspace for a new client, evicting the least recently used idle one when full. */
+function createAdditionalWorkspace(): WorkspaceRuntime {
+	if (workspaceRuntimes.size >= MAX_WORKSPACES && !evictIdleWorkspace()) {
+		throw new HttpRequestError(503, "Too many active workspaces");
+	}
+	const created = createWorkspaceRuntime(randomUUID(), initialDirectory);
+	workspaceRuntimes.set(created.id, created);
+	return created;
+}
+
+function evictIdleWorkspace(): boolean {
+	let oldest: WorkspaceRuntime | undefined;
+	for (const value of workspaceRuntimes.values()) {
+		if (value.id === defaultWorkspaceId) continue;
+		if (value.subscribers.size > 0 || value.activePrompt || value.sessionOperation || value.aborting) continue;
+		if (value.session?.isStreaming || value.compacting) continue;
+		if (!oldest || value.lastUsed < oldest.lastUsed) oldest = value;
+	}
+	if (!oldest) return false;
+	workspaceRuntimes.delete(oldest.id);
+	const session = oldest.session;
+	oldest.session = undefined;
+	if (session) void session.dispose();
+	return true;
+}
 
 function parsePort(value: string): number {
 	const parsed = Number(value);
@@ -119,15 +202,29 @@ function parsePort(value: string): number {
 	return parsed;
 }
 
-async function validateWorkingDirectory(): Promise<void> {
+async function validateWorkingDirectory(path = runtime().cwd): Promise<void> {
 	try {
-		const info = await stat(cwd);
+		const info = await stat(path);
 		if (!info.isDirectory()) throw new Error("path is not a directory");
 	} catch (error) {
-		throw new Error(
-			`PI_WEB_CWD is not a readable directory: ${cwd} (${error instanceof Error ? error.message : String(error)})`,
-		);
+		throw new Error(`Not a readable directory: ${path} (${error instanceof Error ? error.message : String(error)})`);
 	}
+}
+
+interface BrowseEntry {
+	name: string;
+	path: string;
+}
+
+/** Subdirectories of `target`, non-hidden first, for the workspace picker browser. */
+async function browseDirectories(target: string): Promise<BrowseEntry[]> {
+	const entries = await readdir(target, { withFileTypes: true });
+	return entries
+		.filter((entry) => entry.isDirectory() && !entry.isSymbolicLink())
+		.map((entry) => entry.name)
+		.sort((a, b) => Number(a.startsWith(".")) - Number(b.startsWith(".")) || a.localeCompare(b))
+		.slice(0, MAX_BROWSE_ENTRIES)
+		.map((name) => ({ name, path: join(target, name) }));
 }
 
 function wireStringify(value: unknown): string {
@@ -161,12 +258,13 @@ function sessionSummary(info: SessionInfo): WebSessionSummary {
 }
 
 async function listSessions(): Promise<WebSessionsResponse> {
-	const sessions = await (sessionLister?.(cwd) ?? SessionManager.list(cwd));
-	sessionCatalog.clear();
-	for (const info of sessions) sessionCatalog.set(info.id, info);
+	const sessions = await (sessionLister?.(runtime().cwd) ?? SessionManager.list(runtime().cwd));
+	const current = runtime().session;
+	runtime().sessionCatalog.clear();
+	for (const info of sessions) runtime().sessionCatalog.set(info.id, info);
 	return {
 		sessions: sessions.map(sessionSummary),
-		...(session?.sessionId ? { currentSessionId: session.sessionId } : {}),
+		...(current?.sessionId ? { currentSessionId: current.sessionId } : {}),
 	};
 }
 
@@ -193,11 +291,11 @@ function sessionSnippet(source: string, needle: string, matchIndex: number): str
 async function searchSessions(rawQuery: string, limit: number): Promise<WebSessionSearchResponse> {
 	const query = rawQuery.trim();
 	if (!query) return { query, matches: [] };
-	if (sessionCatalog.size === 0) await listSessions();
+	if (runtime().sessionCatalog.size === 0) await listSessions();
 
 	const needle = query.toLowerCase();
 	const matches: WebSessionMatch[] = [];
-	for (const info of sessionCatalog.values()) {
+	for (const info of runtime().sessionCatalog.values()) {
 		const transcript = info.allMessagesText;
 		const haystack = `${info.name ?? ""}\n${transcript}`.toLowerCase();
 		const at = haystack.indexOf(needle);
@@ -256,6 +354,7 @@ function settingsView(manager: SettingsManager): WebSettings {
 		...(defaultModel ? { defaultModel } : {}),
 		...(defaultThinkingLevel ? { defaultThinkingLevel } : {}),
 		modelThinkingLevels,
+		...(manager.getEnabledModels() ? { enabledModels: manager.getEnabledModels() } : {}),
 		compaction: manager.getCompactionSettings(),
 		steeringMode: manager.getSteeringMode(),
 		followUpMode: manager.getFollowUpMode(),
@@ -265,6 +364,15 @@ function settingsView(manager: SettingsManager): WebSettings {
 
 /** Applies a validated settings patch. Model thinking-level overrides are replaced as a set. */
 function applySettingsPatch(manager: SettingsManager, body: Record<string, unknown>): void {
+	if ("enabledModels" in body) {
+		if (
+			!Array.isArray(body.enabledModels) ||
+			!body.enabledModels.every((value) => typeof value === "string" && value.trim())
+		) {
+			throw new HttpRequestError(400, "enabledModels must be a list of model references");
+		}
+		manager.setEnabledModels(body.enabledModels);
+	}
 	if ("defaultModel" in body) {
 		const value = body.defaultModel;
 		if (value !== null) {
@@ -349,16 +457,16 @@ function dayStart(offsetDays: number): Date {
 }
 
 async function sessionUsage(path: string, modified: number, since: number): Promise<UsageSummary> {
-	const cached = usageCache.get(path);
+	const cached = runtime().usageCache.get(path);
 	if (cached && cached.modified === modified && cached.since === since) return cached.summary;
 	const summary = summarizeUsage(SessionManager.open(path).getEntries(), since);
-	usageCache.set(path, { modified, since, summary });
+	runtime().usageCache.set(path, { modified, since, summary });
 	return summary;
 }
 
 /** Aggregate usage for every project session touched within the recent window. */
 async function projectUsage(days: number): Promise<WebUsage> {
-	const sessions = await (sessionLister?.(cwd) ?? SessionManager.list(cwd));
+	const sessions = await (sessionLister?.(runtime().cwd) ?? SessionManager.list(runtime().cwd));
 	const start = dayStart(days - 1);
 	const since = start.getTime();
 	const models = new Map<string, WebUsageModel>();
@@ -373,7 +481,7 @@ async function projectUsage(days: number): Promise<WebUsage> {
 			// A single unreadable session should not fail the whole report.
 		}
 	}
-	for (const entries of deletedSessionUsage.values()) {
+	for (const entries of runtime().deletedSessionUsage.values()) {
 		summaries.push(summarizeUsage(entries, since));
 	}
 	for (const summary of summaries) {
@@ -416,7 +524,7 @@ async function projectUsage(days: number): Promise<WebUsage> {
 }
 
 function runningExecutions(): WebToolExecution[] {
-	return [...activeToolExecutions.values()]
+	return [...runtime().activeToolExecutions.values()]
 		.filter((execution) => execution.status === "running")
 		.map((execution) => ({ ...execution }));
 }
@@ -436,22 +544,23 @@ function completedExecution(execution: WebToolExecution): WebToolExecution {
 }
 
 function snapshotExecutions(): WebToolExecution[] {
-	return [...activeToolExecutions.values()].map((execution) =>
+	return [...runtime().activeToolExecutions.values()].map((execution) =>
 		execution.status === "running" ? { ...execution } : completedExecution(execution),
 	);
 }
 
 function sessionDelta(): WebSnapshotDelta {
-	const current = session?.agent.state;
+	const currentSession = runtime().session;
+	const current = currentSession?.agent.state;
 	const lastMessage = current?.messages.at(-1);
 	const wasAborted = lastMessage?.role === "assistant" && lastMessage.stopReason === "aborted";
-	const streaming = Boolean(activePrompt) || Boolean(session?.isStreaming);
-	const error = promptError ?? sessionError ?? (wasAborted ? undefined : current?.errorMessage);
-	const phase: WebSnapshotDelta["phase"] = !session
+	const streaming = Boolean(runtime().activePrompt) || Boolean(currentSession?.isStreaming);
+	const error = runtime().promptError ?? runtime().sessionError ?? (wasAborted ? undefined : current?.errorMessage);
+	const phase: WebSnapshotDelta["phase"] = !currentSession
 		? "unavailable"
-		: aborting
+		: runtime().aborting
 			? "stopping"
-			: compacting
+			: runtime().compacting
 				? "compacting"
 				: streaming
 					? "streaming"
@@ -460,22 +569,22 @@ function sessionDelta(): WebSnapshotDelta {
 						: "idle";
 	return {
 		protocolVersion: 1,
-		sequence,
-		ready: session !== undefined,
-		cwd,
+		sequence: runtime().sequence,
+		ready: currentSession !== undefined,
+		cwd: runtime().cwd,
 		prompting: streaming,
 		phase,
 		...(current?.streamingMessage === undefined ? {} : { streamingMessage: current.streamingMessage }),
 		pendingToolCalls: current ? [...current.pendingToolCalls] : [],
 		toolExecutions: runningExecutions(),
-		...(session ? { contextUsage: session.getContextUsage() } : {}),
-		...(session ? { thinkingLevel: session.thinkingLevel, sessionId: session.sessionId } : {}),
-		...(session?.sessionName ? { sessionName: session.sessionName } : {}),
-		...(session
+		...(currentSession ? { contextUsage: currentSession.getContextUsage() } : {}),
+		...(currentSession ? { thinkingLevel: currentSession.thinkingLevel, sessionId: currentSession.sessionId } : {}),
+		...(currentSession?.sessionName ? { sessionName: currentSession.sessionName } : {}),
+		...(currentSession
 			? {
 					queuedMessages: {
-						steering: [...session.getSteeringMessages()],
-						followUp: [...session.getFollowUpMessages()],
+						steering: [...currentSession.getSteeringMessages()],
+						followUp: [...currentSession.getFollowUpMessages()],
 					},
 				}
 			: {}),
@@ -484,30 +593,46 @@ function sessionDelta(): WebSnapshotDelta {
 }
 
 function sessionStatsView(): WebSessionStats | undefined {
-	if (!session) return undefined;
-	const stats = session.getSessionStats();
+	const currentSession = runtime().session;
+	if (!currentSession) return undefined;
+	const stats = currentSession.getSessionStats();
 	return {
 		userMessages: stats.userMessages,
 		assistantMessages: stats.assistantMessages,
 		toolCalls: stats.toolCalls,
 		tokens: stats.tokens.total,
 		cost: stats.cost,
-		context: contextBreakdown(session.agent.state.messages, session.systemPrompt, stats.contextUsage?.tokens),
+		context: contextBreakdown(
+			currentSession.agent.state.messages,
+			currentSession.systemPrompt,
+			stats.contextUsage?.tokens,
+		),
 	};
 }
 
 function sessionState(): WebSnapshot {
-	const models = session?.modelRuntime.getAvailableSnapshot() ?? [];
-	const thinkingLevels = session?.getAvailableThinkingLevels() ?? [];
+	const currentSession = runtime().session;
+	const availableModels = currentSession?.modelRuntime.getAvailableSnapshot() ?? [];
+	const enabled = currentSession?.settingsManager.getEnabledModels();
+	const activeModel = currentSession?.model;
+	const models =
+		enabled === undefined
+			? availableModels
+			: availableModels.filter(
+					(model) =>
+						enabled.includes(`${model.provider}/${model.id}`) ||
+						(model.provider === activeModel?.provider && model.id === activeModel?.id),
+				);
+	const thinkingLevels = currentSession?.getAvailableThinkingLevels() ?? [];
 	const sessionStats = sessionStatsView();
 	return {
-		messages: session?.agent.state.messages ?? [],
+		messages: currentSession?.agent.state.messages ?? [],
 		...sessionDelta(),
 		// Full snapshots list every execution so the client can keep status/timing for tools
 		// whose result lives in `messages`.
 		toolExecutions: snapshotExecutions(),
-		git: gitState,
-		...(session?.model ? { model: { provider: session.model.provider, id: session.model.id } } : {}),
+		git: runtime().gitState,
+		...(activeModel ? { model: { provider: activeModel.provider, id: activeModel.id } } : {}),
 		models: models.map((model) => ({
 			provider: model.provider,
 			id: model.id,
@@ -528,10 +653,10 @@ function sseFrame(event: string, data: unknown): string {
 	return `event: ${event}\ndata: ${wireStringify(data)}\n\n`;
 }
 
-function removeSubscriber(subscriber: SseSubscriber, destroy = false): void {
+function removeSubscriber(subscriber: SseSubscriber, destroy = false, target = runtime()): void {
 	if (subscriber.closed) return;
 	subscriber.closed = true;
-	subscribers.delete(subscriber);
+	target.subscribers.delete(subscriber);
 	clearInterval(subscriber.heartbeat);
 	if (destroy && !subscriber.response.writableEnded) subscriber.response.destroy();
 }
@@ -592,7 +717,7 @@ function updateEnvelope(eventType: string): WebEventEnvelope {
 
 function broadcast(envelope: WebEventEnvelope): void {
 	const frame = sseFrame(envelope.kind, envelope);
-	for (const subscriber of subscribers) enqueueSubscriber(subscriber, frame);
+	for (const subscriber of runtime().subscribers) enqueueSubscriber(subscriber, frame);
 }
 
 function broadcastSnapshot(): void {
@@ -600,11 +725,11 @@ function broadcastSnapshot(): void {
 }
 
 async function refreshGitStatus(): Promise<void> {
-	const requestId = ++gitRefreshId;
-	const result = await readGitStatus(cwd);
-	if (requestId !== gitRefreshId) return;
-	gitState = result;
-	sequence += 1;
+	const requestId = ++runtime().gitRefreshId;
+	const result = await readGitStatus(runtime().cwd);
+	if (requestId !== runtime().gitRefreshId) return;
+	runtime().gitState = result;
+	runtime().sequence += 1;
 	broadcastSnapshot();
 }
 
@@ -614,7 +739,7 @@ function broadcastUpdate(eventType: string): void {
 
 function updateToolExecution(event: AgentSessionEvent): void {
 	if (event.type === "tool_execution_start") {
-		activeToolExecutions.set(event.toolCallId, {
+		runtime().activeToolExecutions.set(event.toolCallId, {
 			toolCallId: event.toolCallId,
 			toolName: event.toolName,
 			args: event.args,
@@ -622,8 +747,8 @@ function updateToolExecution(event: AgentSessionEvent): void {
 			startedAt: Date.now(),
 		});
 	} else if (event.type === "tool_execution_update") {
-		const previous = activeToolExecutions.get(event.toolCallId);
-		activeToolExecutions.set(event.toolCallId, {
+		const previous = runtime().activeToolExecutions.get(event.toolCallId);
+		runtime().activeToolExecutions.set(event.toolCallId, {
 			toolCallId: event.toolCallId,
 			toolName: event.toolName,
 			args: event.args,
@@ -633,8 +758,8 @@ function updateToolExecution(event: AgentSessionEvent): void {
 			partialResult: event.partialResult,
 		});
 	} else if (event.type === "tool_execution_end") {
-		const previous = activeToolExecutions.get(event.toolCallId);
-		activeToolExecutions.set(event.toolCallId, {
+		const previous = runtime().activeToolExecutions.get(event.toolCallId);
+		runtime().activeToolExecutions.set(event.toolCallId, {
 			toolCallId: event.toolCallId,
 			toolName: event.toolName,
 			args: previous?.args,
@@ -650,64 +775,70 @@ function updateToolExecution(event: AgentSessionEvent): void {
 function subscribeToSession(nextSession: AgentSession): void {
 	nextSession.subscribe((event) => {
 		if (event.type === "bash_execution_update") return;
-		if (event.type === "compaction_start") compacting = true;
-		else if (event.type === "compaction_end") compacting = false;
+		if (event.type === "compaction_start") runtime().compacting = true;
+		else if (event.type === "compaction_end") runtime().compacting = false;
 		updateToolExecution(event);
-		sequence += 1;
+		runtime().sequence += 1;
 		broadcastUpdate(event.type);
 	});
 }
 
-function createSessionManager(selection: SessionSelection): SessionManager {
-	if (selection === "recent") return SessionManager.continueRecent(cwd);
-	if (selection === "new") return SessionManager.create(cwd);
-	return SessionManager.open(selection.path, undefined, cwd);
+function createSessionManager(selection: SessionSelection, directory = runtime().cwd): SessionManager {
+	if (selection === "recent") return SessionManager.continueRecent(directory);
+	if (selection === "new") return SessionManager.create(directory);
+	return SessionManager.open(selection.path, undefined, directory);
 }
 
-async function openSession(selection: SessionSelection): Promise<void> {
+async function openSession(selection: SessionSelection, directory = runtime().cwd): Promise<void> {
 	try {
 		const created = sessionFactory
-			? await sessionFactory(selection, cwd)
-			: (await createAgentSession({ cwd, sessionManager: createSessionManager(selection) })).session;
-		const previous = session;
-		session = created;
-		sessionError = undefined;
-		promptError = undefined;
-		aborting = false;
-		compacting = false;
-		activeToolExecutions.clear();
-		subscribeToSession(session);
+			? await sessionFactory(selection, directory)
+			: (await createAgentSession({ cwd: directory, sessionManager: createSessionManager(selection, directory) }))
+					.session;
+		const previous = runtime().session;
+		runtime().cwd = directory;
+		runtime().session = created;
+		runtime().sessionError = undefined;
+		runtime().promptError = undefined;
+		runtime().aborting = false;
+		runtime().compacting = false;
+		runtime().activeToolExecutions.clear();
+		subscribeToSession(created);
 		if (previous) previous.dispose();
-		sequence += 1;
+		runtime().sequence += 1;
 		broadcastSnapshot();
 		if (previous) void refreshGitStatus();
 	} catch (error) {
-		sessionError = error instanceof Error ? error.message : String(error);
-		broadcastSnapshot();
+		if (directory === runtime().cwd) {
+			runtime().sessionError = error instanceof Error ? error.message : String(error);
+			broadcastSnapshot();
+		}
 		throw error;
 	}
 }
 
-function startSessionOpen(selection: SessionSelection): Promise<void> {
-	const operation = openSession(selection);
-	sessionOperation = operation;
+function startSessionOpen(selection: SessionSelection, directory = runtime().cwd): Promise<void> {
+	const operation = openSession(selection, directory);
+	runtime().sessionOperation = operation;
 	operation.then(
 		() => {
-			if (sessionOperation === operation) sessionOperation = undefined;
+			if (runtime().sessionOperation === operation) runtime().sessionOperation = undefined;
 		},
 		() => {
-			if (sessionOperation === operation) sessionOperation = undefined;
+			if (runtime().sessionOperation === operation) runtime().sessionOperation = undefined;
 		},
 	);
 	return operation;
 }
 
 async function ensureSession(): Promise<AgentSession> {
-	if (session) return session;
-	if (!sessionOperation) startSessionOpen("recent");
-	await sessionOperation;
-	if (!session) throw new Error(sessionError ?? "Unable to create an agent session");
-	return session;
+	const existing = runtime().session;
+	if (existing) return existing;
+	if (!runtime().sessionOperation) startSessionOpen("recent");
+	await runtime().sessionOperation;
+	const created = runtime().session;
+	if (!created) throw new Error(runtime().sessionError ?? "Unable to create an agent session");
+	return created;
 }
 
 async function readBody(request: IncomingMessage): Promise<Record<string, unknown>> {
@@ -826,15 +957,149 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			blocked: false,
 			closed: false,
 		};
-		subscribers.add(subscriber);
-		request.on("close", () => removeSubscriber(subscriber));
-		response.on("close", () => removeSubscriber(subscriber));
+		const target = runtime();
+		target.subscribers.add(subscriber);
+		request.on("close", () => removeSubscriber(subscriber, false, target));
+		response.on("close", () => removeSubscriber(subscriber, false, target));
 		enqueueSubscriber(subscriber, sseFrame("snapshot", snapshotEnvelope()));
 		return;
 	}
 
 	if (url.pathname === "/api/state" && request.method === "GET") {
 		sendJson(response, 200, sessionState());
+		return;
+	}
+
+	if (url.pathname === "/api/workspaces" && request.method === "GET") {
+		sendJson(response, 200, { id: runtime().id, current: runtime().cwd, recent: runtime().recentWorkspaces });
+		return;
+	}
+
+	if (url.pathname === "/api/workspaces" && request.method === "POST") {
+		let created: WorkspaceRuntime;
+		try {
+			created = createAdditionalWorkspace();
+		} catch (error) {
+			sendJson(response, error instanceof HttpRequestError ? error.status : 500, {
+				error: error instanceof Error ? error.message : String(error),
+			});
+			return;
+		}
+		void runtimeStorage.run(created, () => startSessionOpen("recent"));
+		sendJson(response, 200, { id: created.id, current: created.cwd, recent: created.recentWorkspaces });
+		return;
+	}
+
+	if (url.pathname === "/api/workspace/browse" && request.method === "GET") {
+		const requested = url.searchParams.get("path")?.trim();
+		const target = requested ? resolve(requested) : runtime().cwd;
+		try {
+			await validateWorkingDirectory(target);
+			const entries = await browseDirectories(target);
+			const parent = dirname(target);
+			sendJson(response, 200, {
+				path: target,
+				parent: parent === target ? null : parent,
+				home: homedir(),
+				entries,
+			});
+		} catch {
+			sendJson(response, 400, { error: `Not a readable directory: ${target}` });
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/workspace/select" && request.method === "POST") {
+		if (
+			runtime().sessionOperation ||
+			runtime().activePrompt ||
+			runtime().session?.isStreaming ||
+			runtime().aborting
+		) {
+			sendJson(response, 409, { error: "Cannot switch workspaces while the agent is busy" });
+			return;
+		}
+		let body: Record<string, unknown>;
+		try {
+			body = await readBody(request);
+		} catch (error) {
+			sendJson(response, error instanceof HttpRequestError ? error.status : 400, {
+				error: error instanceof Error ? error.message : String(error),
+			});
+			return;
+		}
+		if (typeof body.path !== "string" || !body.path.trim() || !body.path.startsWith("/")) {
+			sendJson(response, 400, { error: "An absolute workspace path is required" });
+			return;
+		}
+		const nextCwd = resolve(body.path);
+		try {
+			await validateWorkingDirectory(nextCwd);
+		} catch (error) {
+			sendJson(response, 400, { error: error instanceof Error ? error.message : String(error) });
+			return;
+		}
+		if (nextCwd === runtime().cwd) {
+			sendJson(response, 200, { ok: true });
+			return;
+		}
+		try {
+			await startSessionOpen("recent", nextCwd);
+			runtime().sessionCatalog.clear();
+			runtime().usageCache.clear();
+			runtime().deletedSessionUsage.clear();
+			runtime().gitState = { state: "loading", files: [] };
+			runtime().recentWorkspaces = [nextCwd, ...runtime().recentWorkspaces.filter((entry) => entry !== nextCwd)];
+			runtime().sequence += 1;
+			broadcastSnapshot();
+			void refreshGitStatus();
+			sendJson(response, 200, { ok: true });
+		} catch (error) {
+			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/models" && request.method === "GET") {
+		sendJson(response, 200, {
+			models:
+				runtime()
+					.session?.modelRuntime.getAvailableSnapshot()
+					.map((model) => ({
+						provider: model.provider,
+						id: model.id,
+						name: model.name,
+						contextWindow: model.contextWindow,
+					})) ?? [],
+		});
+		return;
+	}
+
+	if (url.pathname === "/api/models/refresh" && request.method === "POST") {
+		if (
+			runtime().sessionOperation ||
+			runtime().activePrompt ||
+			runtime().session?.isStreaming ||
+			runtime().aborting
+		) {
+			sendJson(response, 409, { error: "Cannot refresh models while the agent is busy" });
+			return;
+		}
+		const currentSession = runtime().session;
+		if (!currentSession) {
+			sendJson(response, 503, { error: "No active session" });
+			return;
+		}
+		try {
+			const result = await currentSession.modelRuntime.refresh({ force: true, allowNetwork: true });
+			runtime().sequence += 1;
+			broadcastSnapshot();
+			sendJson(response, 200, {
+				errors: [...result.errors].map(([provider, error]) => `${provider}: ${error.message}`),
+			});
+		} catch (error) {
+			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
+		}
 		return;
 	}
 
@@ -863,7 +1128,7 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 	if (url.pathname === "/api/files" && request.method === "GET") {
 		try {
 			const files = await searchProjectFiles(
-				cwd,
+				runtime().cwd,
 				url.searchParams.get("q") ?? "",
 				parseFileLimit(url.searchParams.get("limit")),
 			);
@@ -884,20 +1149,22 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 	}
 
 	if (url.pathname === "/api/settings" && request.method === "GET") {
-		if (!session) {
+		const currentSession = runtime().session;
+		if (!currentSession) {
 			sendJson(response, 503, { error: "No active session" });
 			return;
 		}
-		sendJson(response, 200, settingsView(session.settingsManager));
+		sendJson(response, 200, settingsView(currentSession.settingsManager));
 		return;
 	}
 
 	if (url.pathname === "/api/settings" && request.method === "POST") {
-		if (sessionOperation) {
+		if (runtime().sessionOperation) {
 			sendJson(response, 409, { error: "A session transition is already running" });
 			return;
 		}
-		if (!session) {
+		const currentSession = runtime().session;
+		if (!currentSession) {
 			sendJson(response, 503, { error: "No active session" });
 			return;
 		}
@@ -910,9 +1177,11 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			return;
 		}
 		try {
-			applySettingsPatch(session.settingsManager, body);
-			await session.settingsManager.flush();
-			sendJson(response, 200, settingsView(session.settingsManager));
+			applySettingsPatch(currentSession.settingsManager, body);
+			await currentSession.settingsManager.flush();
+			runtime().sequence += 1;
+			broadcastSnapshot();
+			sendJson(response, 200, settingsView(currentSession.settingsManager));
 		} catch (error) {
 			const status = error instanceof HttpRequestError ? error.status : 500;
 			sendJson(response, status, { error: error instanceof Error ? error.message : String(error) });
@@ -921,12 +1190,12 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 	}
 
 	if (url.pathname === "/api/git/refresh" && request.method === "POST") {
-		if (sessionOperation || activePrompt || session?.isStreaming) {
+		if (runtime().sessionOperation || runtime().activePrompt || runtime().session?.isStreaming) {
 			sendJson(response, 409, { error: "Cannot refresh Git while the session is busy" });
 			return;
 		}
 		await refreshGitStatus();
-		sendJson(response, 200, gitState);
+		sendJson(response, 200, runtime().gitState);
 		return;
 	}
 
@@ -936,6 +1205,7 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			sendJson(response, 400, { error: "path is required" });
 			return;
 		}
+		const gitState = runtime().gitState;
 		if (gitState.state !== "ready" || !gitState.root) {
 			sendJson(response, 409, { error: "Git status is unavailable" });
 			return;
@@ -967,7 +1237,7 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			sendJson(response, 400, { error: "streamingBehavior must be steer" });
 			return;
 		}
-		if (sessionOperation && session) {
+		if (runtime().sessionOperation && runtime().session) {
 			sendJson(response, 409, { error: "A session transition is already running" });
 			return;
 		}
@@ -978,8 +1248,8 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
 			return;
 		}
-		if (activePrompt || activeSession.isStreaming) {
-			if (aborting) {
+		if (runtime().activePrompt || activeSession.isStreaming) {
+			if (runtime().aborting) {
 				sendJson(response, 409, { error: "Stopping the current task" });
 				return;
 			}
@@ -995,31 +1265,32 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			}
 			return;
 		}
-		if (aborting) {
+		if (runtime().aborting) {
 			sendJson(response, 409, { error: "Stopping the current task" });
 			return;
 		}
-		promptError = undefined;
-		activeToolExecutions.clear();
-		activePrompt = { session: activeSession };
-		sequence += 1;
+		runtime().promptError = undefined;
+		runtime().activeToolExecutions.clear();
+		runtime().activePrompt = { session: activeSession };
+		runtime().sequence += 1;
 		broadcastSnapshot();
 		try {
 			await activeSession.prompt(body.text);
 			sendJson(response, 200, { ok: true });
 		} catch (error) {
 			const lastMessage = activeSession.agent.state.messages.at(-1);
-			const aborted = aborting || (lastMessage?.role === "assistant" && lastMessage.stopReason === "aborted");
+			const aborted =
+				runtime().aborting || (lastMessage?.role === "assistant" && lastMessage.stopReason === "aborted");
 			if (aborted) {
-				promptError = undefined;
+				runtime().promptError = undefined;
 				sendJson(response, 200, { ok: true, aborted: true });
 			} else {
-				promptError = error instanceof Error ? error.message : String(error);
-				sendJson(response, 500, { error: promptError });
+				runtime().promptError = error instanceof Error ? error.message : String(error);
+				sendJson(response, 500, { error: runtime().promptError });
 			}
 		} finally {
-			activePrompt = undefined;
-			sequence += 1;
+			runtime().activePrompt = undefined;
+			runtime().sequence += 1;
 			broadcastSnapshot();
 			void refreshGitStatus();
 		}
@@ -1027,32 +1298,38 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 	}
 
 	if (url.pathname === "/api/abort" && request.method === "POST") {
-		if (sessionOperation && session) {
+		if (runtime().sessionOperation && runtime().session) {
 			sendJson(response, 409, { error: "A session transition is already running" });
 			return;
 		}
-		if (!session || (!activePrompt && !session.isStreaming)) {
+		const currentSession = runtime().session;
+		if (!currentSession || (!runtime().activePrompt && !currentSession.isStreaming)) {
 			sendJson(response, 200, { ok: true });
 			return;
 		}
-		aborting = true;
-		sequence += 1;
+		runtime().aborting = true;
+		runtime().sequence += 1;
 		broadcastSnapshot();
 		try {
-			await session.abort();
+			await currentSession.abort();
 			sendJson(response, 200, { ok: true });
 		} catch (error) {
 			sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
 		} finally {
-			aborting = false;
-			sequence += 1;
+			runtime().aborting = false;
+			runtime().sequence += 1;
 			broadcastSnapshot();
 		}
 		return;
 	}
 
 	if (url.pathname === "/api/session/delete" && request.method === "POST") {
-		if (sessionOperation || activePrompt || session?.isStreaming || aborting) {
+		if (
+			runtime().sessionOperation ||
+			runtime().activePrompt ||
+			runtime().session?.isStreaming ||
+			runtime().aborting
+		) {
 			sendJson(response, 409, { error: "Cannot delete a session while the agent is busy" });
 			return;
 		}
@@ -1068,11 +1345,11 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			sendJson(response, 400, { error: "id is required" });
 			return;
 		}
-		if (session?.sessionId === body.id) {
+		if (runtime().session?.sessionId === body.id) {
 			sendJson(response, 409, { error: "Cannot delete the current session" });
 			return;
 		}
-		const selected = sessionCatalog.get(body.id);
+		const selected = runtime().sessionCatalog.get(body.id);
 		if (!selected) {
 			sendJson(response, 404, { error: "Session not found" });
 			return;
@@ -1080,10 +1357,10 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 		try {
 			const entries = SessionManager.open(selected.path).getEntries();
 			await unlink(selected.path);
-			deletedSessionUsage.set(body.id, entries);
-			usageCache.delete(selected.path);
-			sessionCatalog.delete(body.id);
-			sequence += 1;
+			runtime().deletedSessionUsage.set(body.id, entries);
+			runtime().usageCache.delete(selected.path);
+			runtime().sessionCatalog.delete(body.id);
+			runtime().sequence += 1;
 			broadcastSnapshot();
 			sendJson(response, 200, { ok: true });
 		} catch (error) {
@@ -1093,11 +1370,11 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 	}
 
 	if (url.pathname === "/api/session/select" && request.method === "POST") {
-		if (sessionOperation) {
+		if (runtime().sessionOperation) {
 			sendJson(response, 409, { error: "A session transition is already running" });
 			return;
 		}
-		if (activePrompt || session?.isStreaming || aborting) {
+		if (runtime().activePrompt || runtime().session?.isStreaming || runtime().aborting) {
 			sendJson(response, 409, { error: "Cannot switch sessions while a prompt is running" });
 			return;
 		}
@@ -1113,11 +1390,11 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			sendJson(response, 400, { error: "id is required" });
 			return;
 		}
-		if (session?.sessionId === body.id) {
+		if (runtime().session?.sessionId === body.id) {
 			sendJson(response, 200, { ok: true });
 			return;
 		}
-		let selected = sessionCatalog.get(body.id);
+		let selected = runtime().sessionCatalog.get(body.id);
 		if (!selected) {
 			try {
 				await listSessions();
@@ -1125,7 +1402,7 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 				sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
 				return;
 			}
-			selected = sessionCatalog.get(body.id);
+			selected = runtime().sessionCatalog.get(body.id);
 		}
 		if (!selected) {
 			sendJson(response, 404, { error: "Session not found" });
@@ -1141,11 +1418,17 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 	}
 
 	if (url.pathname === "/api/session/model" && request.method === "POST") {
-		if (sessionOperation || activePrompt || session?.isStreaming || aborting) {
+		if (
+			runtime().sessionOperation ||
+			runtime().activePrompt ||
+			runtime().session?.isStreaming ||
+			runtime().aborting
+		) {
 			sendJson(response, 409, { error: "Cannot change model while the session is busy" });
 			return;
 		}
-		if (!session) {
+		const currentSession = runtime().session;
+		if (!currentSession) {
 			sendJson(response, 503, { error: "No active session" });
 			return;
 		}
@@ -1161,16 +1444,25 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			sendJson(response, 400, { error: "provider and id are required" });
 			return;
 		}
-		const model = session.modelRuntime
+		const enabled = currentSession.settingsManager.getEnabledModels();
+		const activeModel = currentSession.model;
+		const model = currentSession.modelRuntime
 			.getAvailableSnapshot()
-			.find((candidate) => candidate.provider === body.provider && candidate.id === body.id);
+			.find(
+				(candidate) =>
+					candidate.provider === body.provider &&
+					candidate.id === body.id &&
+					(enabled === undefined ||
+						enabled.includes(`${candidate.provider}/${candidate.id}`) ||
+						(candidate.provider === activeModel?.provider && candidate.id === activeModel?.id)),
+			);
 		if (!model) {
 			sendJson(response, 404, { error: "Model is not available" });
 			return;
 		}
 		try {
-			await session.setModel(model);
-			sequence += 1;
+			await currentSession.setModel(model);
+			runtime().sequence += 1;
 			broadcastSnapshot();
 			sendJson(response, 200, { ok: true });
 		} catch (error) {
@@ -1180,11 +1472,17 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 	}
 
 	if (url.pathname === "/api/session/thinking" && request.method === "POST") {
-		if (sessionOperation || activePrompt || session?.isStreaming || aborting) {
+		if (
+			runtime().sessionOperation ||
+			runtime().activePrompt ||
+			runtime().session?.isStreaming ||
+			runtime().aborting
+		) {
 			sendJson(response, 409, { error: "Cannot change thinking level while the session is busy" });
 			return;
 		}
-		if (!session) {
+		const currentSession = runtime().session;
+		if (!currentSession) {
 			sendJson(response, 503, { error: "No active session" });
 			return;
 		}
@@ -1200,14 +1498,14 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			sendJson(response, 400, { error: "level is required" });
 			return;
 		}
-		const level = session.getAvailableThinkingLevels().find((candidate) => candidate === body.level);
+		const level = currentSession.getAvailableThinkingLevels().find((candidate) => candidate === body.level);
 		if (!level) {
 			sendJson(response, 400, { error: "Thinking level is not supported by the current model" });
 			return;
 		}
 		try {
-			session.setThinkingLevel(level);
-			sequence += 1;
+			currentSession.setThinkingLevel(level);
+			runtime().sequence += 1;
 			broadcastSnapshot();
 			sendJson(response, 200, { ok: true });
 		} catch (error) {
@@ -1217,11 +1515,12 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 	}
 
 	if (url.pathname === "/api/session/name" && request.method === "POST") {
-		if (sessionOperation) {
+		if (runtime().sessionOperation) {
 			sendJson(response, 409, { error: "A session transition is already running" });
 			return;
 		}
-		if (!session) {
+		const currentSession = runtime().session;
+		if (!currentSession) {
 			sendJson(response, 503, { error: "No active session" });
 			return;
 		}
@@ -1243,7 +1542,7 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			return;
 		}
 		try {
-			session.setSessionName(name);
+			currentSession.setSessionName(name);
 			sendJson(response, 200, { ok: true });
 		} catch (error) {
 			sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
@@ -1252,11 +1551,11 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 	}
 
 	if (url.pathname === "/api/new" && request.method === "POST") {
-		if (sessionOperation) {
+		if (runtime().sessionOperation) {
 			sendJson(response, 409, { error: "A session transition is already running" });
 			return;
 		}
-		if (activePrompt || session?.isStreaming || aborting) {
+		if (runtime().activePrompt || runtime().session?.isStreaming || runtime().aborting) {
 			sendJson(response, 409, { error: "Cannot replace a running session" });
 			return;
 		}
@@ -1293,40 +1592,46 @@ function resolveListenPort(value: number): number {
 
 function configureRuntime(options: WebServerOptions): void {
 	port = resolveListenPort(options.port ?? configuredPort);
-	cwd = options.cwd ?? configuredCwd;
+	const directory = resolve(options.cwd ?? configuredCwd);
 	isDevelopment = options.mode ? options.mode === "development" : process.env.PI_WEB_MODE !== "production";
 	sessionFactory = options.sessionFactory;
 	sessionLister = options.sessionLister;
-	session = undefined;
-	sessionError = undefined;
-	promptError = undefined;
-	activePrompt = undefined;
-	aborting = false;
-	sessionOperation = undefined;
-	sequence = 0;
-	gitRefreshId += 1;
-	gitState = { state: "loading", files: [] };
-	activeToolExecutions.clear();
-	sessionCatalog.clear();
-	deletedSessionUsage.clear();
-	for (const subscriber of subscribers) removeSubscriber(subscriber, true);
+	initialDirectory = directory;
+	for (const value of workspaceRuntimes.values()) {
+		for (const subscriber of value.subscribers) removeSubscriber(subscriber, true, value);
+	}
+	workspaceRuntimes.clear();
+	defaultWorkspaceId = randomUUID();
+	const created = createWorkspaceRuntime(defaultWorkspaceId, directory);
+	workspaceRuntimes.set(defaultWorkspaceId, created);
+	defaultRuntime = created;
 }
 
 async function closeServer(httpServer: Server): Promise<void> {
-	gitRefreshId += 1;
-	for (const subscriber of subscribers) removeSubscriber(subscriber, true);
-	const pendingOperation = sessionOperation;
-	sessionOperation = undefined;
-	if (pendingOperation) {
+	const runtimes = [...workspaceRuntimes.values()];
+	const pendingOperations: Promise<void>[] = [];
+	for (const value of runtimes) {
+		value.gitRefreshId += 1;
+		for (const subscriber of value.subscribers) removeSubscriber(subscriber, true, value);
+		if (value.sessionOperation) pendingOperations.push(value.sessionOperation);
+		value.sessionOperation = undefined;
+	}
+	for (const operation of pendingOperations) {
 		try {
-			await pendingOperation;
+			await operation;
 		} catch {
 			// The initialization error is already exposed through the session snapshot.
 		}
 	}
-	const currentSession = session;
-	session = undefined;
-	if (currentSession) await currentSession.dispose();
+	const disposed = new Set<AgentSession>();
+	for (const value of runtimes) {
+		const currentSession = value.session;
+		value.session = undefined;
+		if (currentSession && !disposed.has(currentSession)) {
+			disposed.add(currentSession);
+			await currentSession.dispose();
+		}
+	}
 	if (vite) {
 		await vite.close();
 		vite = undefined;
@@ -1356,11 +1661,26 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
 	}
 
 	const httpServer = createServer((request, response) => {
-		void handle(request, response).catch((error: unknown) => {
-			if (!response.headersSent)
-				sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
-			else response.destroy();
-		});
+		const requestUrl = new URL(request.url ?? "/", `http://${request.headers.host}`);
+		const headerToken =
+			typeof request.headers["x-orrery-workspace"] === "string" ? request.headers["x-orrery-workspace"] : undefined;
+		const token = headerToken ?? requestUrl.searchParams.get("workspace") ?? undefined;
+		let selected: WorkspaceRuntime;
+		try {
+			selected = getWorkspace(token);
+		} catch (error) {
+			sendJson(response, error instanceof HttpRequestError ? error.status : 400, {
+				error: error instanceof Error ? error.message : String(error),
+			});
+			return;
+		}
+		void runtimeStorage
+			.run(selected, () => handle(request, response))
+			.catch((error: unknown) => {
+				if (!response.headersSent)
+					sendJson(response, 500, { error: error instanceof Error ? error.message : String(error) });
+				else response.destroy();
+			});
 	});
 
 	await new Promise<void>((resolveListen, rejectListen) => {
@@ -1373,10 +1693,13 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
 		});
 	});
 
-	void refreshGitStatus();
-	void startSessionOpen("recent").catch((error: unknown) => {
-		console.error(`Agent session unavailable: ${error instanceof Error ? error.message : String(error)}`);
-	});
+	const initial = getWorkspace(defaultWorkspaceId);
+	void runtimeStorage.run(initial, () => refreshGitStatus());
+	void runtimeStorage
+		.run(initial, () => startSessionOpen("recent"))
+		.catch((error: unknown) => {
+			console.error(`Agent session unavailable: ${error instanceof Error ? error.message : String(error)}`);
+		});
 
 	return {
 		server: httpServer,
@@ -1388,7 +1711,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
 async function main(): Promise<void> {
 	const handle = await startWebServer();
 	console.log(`Orrery Web UI: http://127.0.0.1:${handle.port}`);
-	console.log(`Working directory: ${cwd}`);
+	console.log(`Working directory: ${runtime().cwd}`);
 	let closing = false;
 	const shutdown = () => {
 		if (closing) return;

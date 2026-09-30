@@ -2,6 +2,16 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added Web UI workspace switching: open any absolute directory as the active workspace and jump between recent ones.
+- Added isolated per-tab Web UI workspaces, so each browser tab keeps its own session, working directory, and recent-workspace list.
+- Added a Web UI model catalog in Settings to search, enable, and refresh available models.
+
+### Changed
+
+- Changed the Web UI session sidebar and inspector to collapse so the transcript can use the full width.
+
 ## [0.2.2] - 2026-09-29
 
 ### Changed

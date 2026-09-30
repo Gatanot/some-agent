@@ -1,8 +1,13 @@
 <script lang="ts">
-	import { Plus, Search, Trash2 } from "@lucide/svelte";
+	import { ChevronDown, FolderOpen, Plus, Search, Trash2 } from "@lucide/svelte";
 	import type { WebSessionMatch, WebSessionSummary, WebSnapshot } from "../protocol.ts";
+	import WorkspacePicker from "./WorkspacePicker.svelte";
 
 	export let snapshot: WebSnapshot | undefined;
+	export let cwd: string;
+	export let workspaces: string[];
+	export let onWorkspaceSelect: (path: string) => void;
+	let workspaceOpen = false;
 	export let sessions: WebSessionSummary[] = [];
 	export let matches: WebSessionMatch[] = [];
 	export let searching = false;
@@ -59,6 +64,11 @@
 
 <aside class="sidebar" aria-label="Session navigation">
 	<div class="sidebar-head">
+		<button class="workspace-select" type="button" title={cwd} aria-haspopup="dialog" aria-expanded={workspaceOpen} on:click={() => (workspaceOpen = true)}>
+			<FolderOpen size={15} />
+			<span class="workspace-select-name">{cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? "工作空间"}</span>
+			<ChevronDown size={14} />
+		</button>
 		<div class="search-row">
 			<div class="search-wrap">
 				<Search size={15} aria-hidden="true" />
@@ -119,4 +129,13 @@
 			{/if}
 		{/if}
 	</nav>
+
+	<WorkspacePicker
+		open={workspaceOpen}
+		{cwd}
+		{workspaces}
+		busy={snapshot?.prompting === true}
+		onSelect={(path) => { workspaceOpen = false; onWorkspaceSelect(path); }}
+		onClose={() => (workspaceOpen = false)}
+	/>
 </aside>

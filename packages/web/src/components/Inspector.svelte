@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { ChartColumn, FileDiff, GitBranch, Moon, RotateCw, Sun, X } from "@lucide/svelte";
+	import { ChartColumn, FileDiff, GitBranch, Moon, RotateCw, Sun } from "@lucide/svelte";
 	import { parseDiffLines } from "../diff.ts";
 	import type { WebContextPartKey, WebGitDiff, WebGitFile, WebSnapshot, WebUsage } from "../protocol.ts";
 	import type { AppState, DiffLine } from "../types.ts";
+	import { workspaceFetch } from "../workspace.ts";
 
 	type InspectorTab = "changes" | "usage";
 	const tabs: InspectorTab[] = ["changes", "usage"];
@@ -10,8 +11,6 @@
 	export let state: AppState;
 	export let snapshot: WebSnapshot | undefined;
 	export let activeTab: InspectorTab;
-	export let open: boolean;
-	export let onClose: () => void;
 	export let onTabSelect: (tab: InspectorTab) => void;
 	export let onRefreshGit: () => void;
 	export let onGitDiff: (path: string) => Promise<WebGitDiff>;
@@ -60,7 +59,7 @@
 		const controller = new AbortController();
 		const timeout = setTimeout(() => controller.abort(), 15_000);
 		try {
-			const response = await fetch("/api/usage", { signal: controller.signal });
+			const response = await workspaceFetch("/api/usage", { signal: controller.signal });
 			const payload: unknown = await response.json();
 			if (!response.ok) {
 				const message = isRecord(payload) && typeof payload.error === "string" ? payload.error : `Failed to load usage (${response.status})`;
@@ -186,14 +185,13 @@
 	}
 </script>
 
-<aside class:open class="inspector" aria-label="Project inspector">
+<aside class="inspector" aria-label="Project inspector">
 	<div class="inspector-heading">
 		<span>Project</span>
 		<div class="inspector-actions">
 			<span class:offline={connectionStatus === "disconnected"} class="connection-chip"><span class="status-dot" aria-hidden="true"></span>{connectionStatus === "connected" ? "Connected" : connectionStatus === "connecting" ? "Connecting" : "Disconnected"}</span>
 			<button class="icon-button theme-toggle" type="button" aria-label={themeActionLabel} title={themeActionLabel} on:click={onToggleTheme}>{#if theme === "light"}<Moon size={15} />{:else}<Sun size={15} />{/if}</button>
 			{#if activeTab === "changes"}<button class="icon-button" type="button" aria-label="Refresh Git status" title="Refresh Git status" disabled={git.state === "loading" || state.phase === "running"} on:click={onRefreshGit}><RotateCw size={15} /></button>{:else if activeTab === "usage"}<button class="icon-button" type="button" aria-label="Refresh usage" title="Refresh usage" disabled={usageLoading} on:click={loadUsage}><RotateCw size={15} /></button>{/if}
-			<button class="icon-button inspector-close" type="button" aria-label="Close inspector" title="Close inspector" on:click={onClose}><X size={17} /></button>
 		</div>
 	</div>
 	<div class="inspector-tabs" role="tablist" aria-label="Project inspector">

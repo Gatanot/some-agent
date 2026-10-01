@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.6] - 2026-10-01
+
+### Changed
+
+- Renamed all workspace packages to the `@gatanot/orrery-*` scope. `@gatanot/orrery` now depends on those packages instead of `@earendil-works/*`. Existing extensions can keep importing the old scopes through compatibility aliases.
 
 ## [0.2.5] - 2026-10-01
 

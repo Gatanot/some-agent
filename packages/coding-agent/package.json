@@ -1,6 +1,6 @@
 {
 	"name": "@gatanot/orrery",
-	"version": "0.2.7",
+	"version": "0.2.6",
 	"description": "Coding agent CLI with read, bash, edit, write tools and session management",
 	"type": "module",
 	"piConfig": {
@@ -56,10 +56,10 @@
 		"prepublishOnly": "npm run clean && npm run build && npm run shrinkwrap"
 	},
 	"dependencies": {
-		"@gatanot/orrery-chord": "^0.2.7",
-		"@gatanot/orrery-agent-core": "^0.2.7",
-		"@gatanot/orrery-ai": "^0.2.7",
-		"@gatanot/orrery-tui": "^0.2.7",
+		"@gatanot/orrery-chord": "^0.2.6",
+		"@gatanot/orrery-agent-core": "^0.2.6",
+		"@gatanot/orrery-ai": "^0.2.6",
+		"@gatanot/orrery-tui": "^0.2.6",
 		"@silvia-odwyer/photon-node": "0.3.4",
 		"chalk": "6.0.0",
 		"cross-spawn": "7.0.6",
@@ -80,9 +80,9 @@
 		"protobufjs": "7.6.6"
 	},
 	"devDependencies": {
-		"@gatanot/orrery-client": "^0.2.7",
-		"@gatanot/orrery-protocol": "^0.2.7",
-		"@gatanot/orrery-server": "^0.2.7",
+		"@gatanot/orrery-client": "^0.2.6",
+		"@gatanot/orrery-protocol": "^0.2.6",
+		"@gatanot/orrery-server": "^0.2.6",
 		"@types/cross-spawn": "6.0.6",
 		"@types/hosted-git-info": "3.0.5",
 		"@types/node": "22.19.19",

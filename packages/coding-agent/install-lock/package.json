@@ -1,10 +1,10 @@
 {
 	"name": "@gatanot/orrery-install",
-	"version": "0.2.7",
+	"version": "0.2.6",
 	"private": true,
 	"description": "Lockfile root used by the Pi installer and updater.",
 	"dependencies": {
-		"@gatanot/orrery": "0.2.7"
+		"@gatanot/orrery": "0.2.6"
 	},
 	"overrides": {
 		"protobufjs": "7.6.6"

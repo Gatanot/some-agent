@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.2.4] - 2026-10-01
+
+### Added
+
+- Orrery local web UI with session management, usage inspector, and workspace picker.
+- Bundled Orrery branding extension, themes, and startup splash.
+
+### Changed
+
+- Rebased on pi 0.87.1 and republished the CLI as `@gatanot/orrery`.
+
 ## [0.87.1] - 2026-09-22
 
 ### New Features

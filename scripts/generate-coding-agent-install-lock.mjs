@@ -310,11 +310,10 @@ function validateGeneratedFiles(installerPackageJson, installLock, internalNames
 		if (entry.dev || entry.devOptional || entry.extraneous) {
 			errors.push(`${lockPath || "root"} contains dev/extraneous metadata`);
 		}
-		if (
-			packageName !== undefined &&
-			(packageName.startsWith(internalPackagePrefix) || internalPackageNames.has(packageName)) &&
-			entry.version !== installerPackageJson.version
-		) {
+		// Only the fork's own @gatanot packages are lockstepped to the installer
+		// version. Vendored @earendil-works/pi-* packages track the upstream pi
+		// release they were synced from and keep their own versions.
+		if (packageName !== undefined && packageName.startsWith("@gatanot/") && entry.version !== installerPackageJson.version) {
 			errors.push(`${lockPath} internal package version ${entry.version} does not match ${installerPackageJson.version}`);
 		}
 		if (entry.hasInstallScript) {

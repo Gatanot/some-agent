@@ -3,7 +3,7 @@
  *
  * The web server runs the agent in-process but never renders the TUI. Importing
  * the package root would load `main.ts` and the interactive components, which
- * depend on fork-local `@earendil-works/pi-tui` builds. Keep the web server on
+ * depend on fork-local `@gatanot/orrery-tui` builds. Keep the web server on
  * this tui-free subset instead.
  */
 

@@ -1,4 +1,4 @@
-import type { Api, Model, RefreshModelsContext, ThinkingLevelMap } from "@earendil-works/pi-ai";
+import type { Api, Model, RefreshModelsContext, ThinkingLevelMap } from "@gatanot/orrery-ai";
 import { fetchWithRetry } from "../utils/management-http.ts";
 import type { ModelsJsonModel, ModelsJsonProvider } from "./model-config.ts";
 

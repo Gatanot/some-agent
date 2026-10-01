@@ -1,6 +1,6 @@
-import type { JsonValue } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import type { Op } from "@earendil-works/chord/delta";
+import type { JsonValue } from "@gatanot/orrery-chord";
+import { BACKGROUND_CONTEXT } from "@gatanot/orrery-chord/context";
+import type { Op } from "@gatanot/orrery-chord/delta";
 import { describe, expect, it } from "vitest";
 import {
 	type DocumentCreate,

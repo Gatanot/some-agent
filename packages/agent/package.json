@@ -1,6 +1,6 @@
 {
-	"name": "@earendil-works/pi-agent-core",
-	"version": "0.87.1",
+	"name": "@gatanot/orrery-agent-core",
+	"version": "0.2.7",
 	"description": "General-purpose agent with transport abstraction, state management, and attachment support",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -59,9 +59,9 @@
 		"prepublishOnly": "npm run build"
 	},
 	"dependencies": {
-		"@earendil-works/chord": "^0.87.1",
-		"@earendil-works/pi-ai": "^0.87.1",
-		"@earendil-works/pi-telemetry": "^0.87.1",
+		"@gatanot/orrery-chord": "^0.2.7",
+		"@gatanot/orrery-ai": "^0.2.7",
+		"@gatanot/orrery-telemetry": "^0.2.7",
 		"@mozilla/readability": "0.6.0",
 		"diff": "8.0.4",
 		"ignore": "7.0.8",
@@ -80,7 +80,7 @@
 	"license": "MIT",
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/earendil-works/pi.git",
+		"url": "git+https://github.com/Gatanot/some-agent.git",
 		"directory": "packages/agent"
 	},
 	"engines": {

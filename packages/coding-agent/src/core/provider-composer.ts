@@ -18,8 +18,8 @@ import {
 	type SimpleStreamOptions,
 	type StreamOptions,
 	type TranscriptContext,
-} from "@earendil-works/pi-ai";
-import { getApiProvider } from "@earendil-works/pi-ai/compat";
+} from "@gatanot/orrery-ai";
+import { getApiProvider } from "@gatanot/orrery-ai/compat";
 import type { ModelConfig, ModelsJsonModel, ModelsJsonModelOverride, ModelsJsonProvider } from "./model-config.ts";
 import { createModelDiscovery } from "./model-discovery.ts";
 import {

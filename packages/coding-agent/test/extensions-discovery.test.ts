@@ -64,7 +64,7 @@ describe("extensions discovery", () => {
 		fs.writeFileSync(
 			path.join(extensionsDir, "coding-agent-import.ts"),
 			`
-				import { getAgentDir } from "@earendil-works/pi-coding-agent";
+				import { getAgentDir } from "@gatanot/orrery";
 				void getAgentDir;
 				export default function(pi) {
 					pi.registerCommand("test", { handler: async () => {} });
@@ -82,7 +82,7 @@ describe("extensions discovery", () => {
 		fs.writeFileSync(
 			path.join(extensionsDir, "oauth-import.ts"),
 			`
-				import * as oauth from "@earendil-works/pi-ai/oauth";
+				import * as oauth from "@gatanot/orrery-ai/oauth";
 				void oauth;
 				export default function(pi) {
 					pi.registerCommand("test", { handler: async () => {} });

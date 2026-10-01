@@ -1,10 +1,10 @@
 {
-	"name": "@earendil-works/pi-coding-agent-install",
-	"version": "0.2.5",
+	"name": "@gatanot/orrery-install",
+	"version": "0.2.7",
 	"private": true,
 	"description": "Lockfile root used by the Pi installer and updater.",
 	"dependencies": {
-		"@gatanot/orrery": "0.2.5"
+		"@gatanot/orrery": "0.2.7"
 	},
 	"overrides": {
 		"protobufjs": "7.6.6"

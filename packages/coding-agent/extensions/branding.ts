@@ -27,16 +27,11 @@
  */
 
 import { basename, resolve, sep } from "node:path";
-import type { AssistantMessage } from "@earendil-works/pi-ai";
-import type {
-	ExtensionAPI,
-	ExtensionContext,
-	ReadonlyFooterDataProvider,
-	Theme,
-} from "@earendil-works/pi-coding-agent";
-import { VERSION } from "@earendil-works/pi-coding-agent";
-import type { TUI } from "@earendil-works/pi-tui";
-import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
+import type { ExtensionAPI, ExtensionContext, ReadonlyFooterDataProvider, Theme } from "@gatanot/orrery";
+import { VERSION } from "@gatanot/orrery";
+import type { AssistantMessage } from "@gatanot/orrery-ai";
+import type { TUI } from "@gatanot/orrery-tui";
+import { truncateToWidth, visibleWidth } from "@gatanot/orrery-tui";
 
 let enabled = true;
 let tui: TUI | undefined;

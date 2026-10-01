@@ -1,26 +1,26 @@
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import {
-	createRemoteServiceBinding,
-	type MutableReplicatedState,
-	RemoteServiceProvider,
-	type RemoteServiceTransport,
-	replicatedState,
-} from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import {
-	FACET_BUNDLE_ARTIFACT_FORMAT,
-	FACET_BUNDLE_ARTIFACT_FORMAT_VERSION,
-	type FacetBundleArtifact,
-} from "@earendil-works/chord/node";
-import {
 	type AgentLane,
 	type LaneSnapshot,
 	type LaneTranscriptSnapshot,
 	type LaneWatchEvent,
 	reduceLaneSnapshot,
-} from "@earendil-works/pi-agent-core";
-import { ProcessTerminal, TuiMainScreen } from "@earendil-works/pi-tui";
+} from "@gatanot/orrery-agent-core";
+import {
+	createRemoteServiceBinding,
+	type MutableReplicatedState,
+	RemoteServiceProvider,
+	type RemoteServiceTransport,
+	replicatedState,
+} from "@gatanot/orrery-chord";
+import { BACKGROUND_CONTEXT } from "@gatanot/orrery-chord/context";
+import {
+	FACET_BUNDLE_ARTIFACT_FORMAT,
+	FACET_BUNDLE_ARTIFACT_FORMAT_VERSION,
+	type FacetBundleArtifact,
+} from "@gatanot/orrery-chord/node";
+import { ProcessTerminal, TuiMainScreen } from "@gatanot/orrery-tui";
 import { beforeAll, describe, expect, test, vi } from "vitest";
 import { type ClientTuiServer, ExperimentalClientTui } from "../src/experimental/client-tui.ts";
 import { createPresentationFacetData } from "../src/experimental/plugins/bundled.ts";
@@ -217,7 +217,7 @@ describe("experimental client TUI", () => {
 			});
 
 			const reloadSource =
-				'"use strict";\nconst { defineFacet, defineService } = require("@earendil-works/chord");\nconst Models = defineService("pi.models");\nmodule.exports = { __esModule: true, default: defineFacet({ id: "test-tui-facet", setup(env) { env.use(Models); } }) };\n';
+				'"use strict";\nconst { defineFacet, defineService } = require("@gatanot/orrery-chord");\nconst Models = defineService("pi.models");\nmodule.exports = { __esModule: true, default: defineFacet({ id: "test-tui-facet", setup(env) { env.use(Models); } }) };\n';
 			const reloadArtifact: FacetBundleArtifact = {
 				format: FACET_BUNDLE_ARTIFACT_FORMAT,
 				formatVersion: FACET_BUNDLE_ARTIFACT_FORMAT_VERSION,
@@ -226,7 +226,7 @@ describe("experimental client TUI", () => {
 				entry: {
 					file: "tui.cjs",
 					integrity: `sha256-${createHash("sha256").update(reloadSource).digest("base64")}`,
-					externalImports: ["@earendil-works/chord"],
+					externalImports: ["@gatanot/orrery-chord"],
 				},
 				source: reloadSource,
 			};

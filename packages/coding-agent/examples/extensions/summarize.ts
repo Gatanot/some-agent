@@ -1,7 +1,7 @@
-import { uuidv7 } from "@earendil-works/pi-ai";
-import type { ExtensionAPI, ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
-import { DynamicBorder, getMarkdownTheme } from "@earendil-works/pi-coding-agent";
-import { Container, Markdown, matchesKey, Text } from "@earendil-works/pi-tui";
+import type { ExtensionAPI, ExtensionCommandContext } from "@gatanot/orrery";
+import { DynamicBorder, getMarkdownTheme } from "@gatanot/orrery";
+import { uuidv7 } from "@gatanot/orrery-ai";
+import { Container, Markdown, matchesKey, Text } from "@gatanot/orrery-tui";
 
 type ContentBlock = {
 	type?: string;

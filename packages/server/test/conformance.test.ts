@@ -1,5 +1,5 @@
-import type { ServiceCall } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT, type SessionMetadata } from "@earendil-works/pi-agent-core";
+import { BACKGROUND_CONTEXT, type SessionMetadata } from "@gatanot/orrery-agent-core";
+import type { ServiceCall } from "@gatanot/orrery-chord";
 import { afterEach, describe, expect, test } from "vitest";
 import type { ByteConnection, ByteConnectionHandler } from "../src/connection.ts";
 import { SessionAmbiguousError } from "../src/errors.ts";

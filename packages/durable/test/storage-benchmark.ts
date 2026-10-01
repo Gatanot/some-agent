@@ -1,5 +1,5 @@
-import type { JsonValue } from "@earendil-works/chord";
-import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
+import type { JsonValue } from "@gatanot/orrery-chord";
+import { BACKGROUND_CONTEXT } from "@gatanot/orrery-chord/context";
 import type { DocumentCreate, Id, Seq, Storage, StorageWrite, TaskRecord } from "../src/types.ts";
 import { ROOT_CONVERSATION_ID } from "../src/types.ts";
 

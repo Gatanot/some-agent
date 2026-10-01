@@ -1,5 +1,5 @@
-import type { Context } from "@earendil-works/chord";
-import { withAbortSignal } from "@earendil-works/chord/context";
+import type { Context } from "@gatanot/orrery-chord";
+import { withAbortSignal } from "@gatanot/orrery-chord/context";
 import type { Session, TxImpl } from "./session.ts";
 import {
 	type AnyKind,

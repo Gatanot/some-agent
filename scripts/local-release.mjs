@@ -7,17 +7,17 @@ import { spawnSync } from "node:child_process";
 import { installCodingAgentConsumer, packReleasePackages, smokeTestCodingAgentConsumer } from "./coding-agent-consumer.mjs";
 
 const packages = [
-	{ directory: "packages/chord", name: "@earendil-works/chord" },
-	{ directory: "packages/telemetry", name: "@earendil-works/pi-telemetry" },
-	{ directory: "packages/ai", name: "@earendil-works/pi-ai" },
-	{ directory: "packages/durable", name: "@earendil-works/pi-durable" },
-	{ directory: "packages/tui", name: "@earendil-works/pi-tui" },
-	{ directory: "packages/agent", name: "@earendil-works/pi-agent-core" },
-	{ directory: "packages/protocol", name: "@earendil-works/pi-protocol" },
-	{ directory: "packages/client", name: "@earendil-works/pi-client" },
-	{ directory: "packages/session-backends/sqlite-node", name: "@earendil-works/pi-session-backend-sqlite-node" },
-	{ directory: "packages/server", name: "@earendil-works/pi-server" },
-	{ directory: "packages/coding-agent", name: "@earendil-works/pi-coding-agent" },
+	{ directory: "packages/chord", name: "@gatanot/orrery-chord" },
+	{ directory: "packages/telemetry", name: "@gatanot/orrery-telemetry" },
+	{ directory: "packages/ai", name: "@gatanot/orrery-ai" },
+	{ directory: "packages/durable", name: "@gatanot/orrery-durable" },
+	{ directory: "packages/tui", name: "@gatanot/orrery-tui" },
+	{ directory: "packages/agent", name: "@gatanot/orrery-agent-core" },
+	{ directory: "packages/protocol", name: "@gatanot/orrery-protocol" },
+	{ directory: "packages/client", name: "@gatanot/orrery-client" },
+	{ directory: "packages/session-backends/sqlite-node", name: "@gatanot/orrery-session-backend-sqlite-node" },
+	{ directory: "packages/server", name: "@gatanot/orrery-server" },
+	{ directory: "packages/coding-agent", name: "@gatanot/orrery" },
 ];
 
 function printUsage() {

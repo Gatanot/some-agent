@@ -6,8 +6,8 @@ import {
 	type JsonlSessionMetadata,
 	JsonlSessionRepo,
 	laneConfig,
-} from "@earendil-works/pi-agent-core";
-import { NodeExecutionEnv } from "@earendil-works/pi-agent-core/node";
+} from "@gatanot/orrery-agent-core";
+import { NodeExecutionEnv } from "@gatanot/orrery-agent-core/node";
 
 export async function createExperimentalSessions(
 	sessionsRoot: string,

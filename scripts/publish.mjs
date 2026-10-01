@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { getPublicWorkspacePackages } from "./release-packages.mjs";
+import { assertPublishedDependenciesMatch, getPublicWorkspacePackages } from "./release-packages.mjs";
 
 const packages = getPublicWorkspacePackages();
 
@@ -91,6 +91,14 @@ for (const pkg of packageStates) {
 	}
 	validatePack(pkg.directory);
 	console.log();
+}
+
+const codingAgent = packageStates.find((pkg) => pkg.name === "@gatanot/orrery");
+if (codingAgent?.published) {
+	const local = JSON.parse(readFileSync(join(codingAgent.directory, "package.json"), "utf8"));
+	const result = run("npm", ["view", `${codingAgent.name}@${codingAgent.version}`, "dependencies", "--json"], { capture: true });
+	const published = JSON.parse(result.stdout || "{}");
+	assertPublishedDependenciesMatch(codingAgent.name, codingAgent.version, local.dependencies ?? {}, published, packageStates);
 }
 
 if (dryRun) {

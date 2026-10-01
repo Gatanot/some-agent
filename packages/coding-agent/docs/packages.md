@@ -79,10 +79,10 @@ Put runtime packages imported by extensions in `dependencies`. Pi installs packa
 
 Pi supplies these packages to extensions and skills:
 
-- `@earendil-works/pi-ai`
-- `@earendil-works/pi-agent-core`
-- `@earendil-works/pi-coding-agent`
-- `@earendil-works/pi-tui`
+- `@gatanot/orrery-ai`
+- `@gatanot/orrery-agent-core`
+- `@gatanot/orrery`
+- `@gatanot/orrery-tui`
 - `typebox`
 
 Declare imported Pi packages in `peerDependencies` with a `"*"` range and do not bundle them. Other Pi packages used as dependencies must be included in the published tarball and referenced through their `node_modules` resource paths.

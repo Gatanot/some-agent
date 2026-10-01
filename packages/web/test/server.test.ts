@@ -5,14 +5,6 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
 import { TextDecoder } from "node:util";
-import {
-	type FauxProviderRegistration,
-	fauxAssistantMessage,
-	fauxText,
-	fauxThinking,
-	fauxToolCall,
-	registerFauxProvider,
-} from "@earendil-works/pi-ai/compat";
 import type { AgentSession, SessionInfo } from "@gatanot/orrery";
 import {
 	createAgentSession,
@@ -22,6 +14,14 @@ import {
 	SettingsManager,
 	type ToolDefinition,
 } from "@gatanot/orrery";
+import {
+	type FauxProviderRegistration,
+	fauxAssistantMessage,
+	fauxText,
+	fauxThinking,
+	fauxToolCall,
+	registerFauxProvider,
+} from "@gatanot/orrery-ai/compat";
 import { Type } from "typebox";
 import { AuthStorage } from "../../coding-agent/src/core/auth-storage.ts";
 import type { WebEventEnvelope, WebSnapshot } from "../src/protocol.ts";

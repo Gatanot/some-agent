@@ -11,9 +11,9 @@ const outputDir = join(codingAgentDir, "install-lock");
 const rootLockfilePath = join(repoRoot, "package-lock.json");
 const outputPackageJsonPath = join(outputDir, "package.json");
 const outputLockfilePath = join(outputDir, "package-lock.json");
-const internalPackagePrefix = "@earendil-works/pi-";
-const internalPackageNames = new Set(["@earendil-works/chord", "@gatanot/orrery"]);
-const installPackageName = "@earendil-works/pi-coding-agent-install";
+const internalPackagePrefix = "@gatanot/orrery-";
+const internalPackageNames = new Set(["@gatanot/orrery"]);
+const installPackageName = "@gatanot/orrery-install";
 const allowedInstallScriptPackages = new Map([
 	["@google/genai@2.21.0", "preinstall is a no-op in the published package"],
 	["esbuild@0.28.2", "postinstall selects and verifies the platform-specific esbuild binary"],
@@ -310,9 +310,7 @@ function validateGeneratedFiles(installerPackageJson, installLock, internalNames
 		if (entry.dev || entry.devOptional || entry.extraneous) {
 			errors.push(`${lockPath || "root"} contains dev/extraneous metadata`);
 		}
-		// Only the fork's own @gatanot packages are lockstepped to the installer
-		// version. Vendored @earendil-works/pi-* packages track the upstream pi
-		// release they were synced from and keep their own versions.
+		// Published orrery packages are lockstepped to the installer version.
 		if (packageName !== undefined && packageName.startsWith("@gatanot/") && entry.version !== installerPackageJson.version) {
 			errors.push(`${lockPath} internal package version ${entry.version} does not match ${installerPackageJson.version}`);
 		}

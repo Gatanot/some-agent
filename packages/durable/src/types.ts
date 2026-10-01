@@ -1,6 +1,6 @@
-import type { Context, JsonValue } from "@earendil-works/chord";
-import type { Op } from "@earendil-works/chord/delta";
-import type { Message } from "@earendil-works/pi-ai";
+import type { Message } from "@gatanot/orrery-ai";
+import type { Context, JsonValue } from "@gatanot/orrery-chord";
+import type { Op } from "@gatanot/orrery-chord/delta";
 
 /** JSON object used as the root of every durable document. */
 export type JsonObject = { [key: string]: JsonValue };

@@ -1,6 +1,6 @@
-import type { Context } from "@earendil-works/chord";
-import type { AssistantMessage } from "@earendil-works/pi-ai";
-import { estimateContextTokens } from "@earendil-works/pi-ai/utils/estimate";
+import type { AssistantMessage } from "@gatanot/orrery-ai";
+import { estimateContextTokens } from "@gatanot/orrery-ai/utils/estimate";
+import type { Context } from "@gatanot/orrery-chord";
 import { effectiveTools } from "../system.ts";
 import {
 	type Completion,

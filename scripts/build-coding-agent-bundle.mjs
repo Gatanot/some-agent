@@ -16,11 +16,11 @@ const banner = {
 	js: 'import { createRequire as __piCreateRequire } from "node:module"; const require = __piCreateRequire(import.meta.url);',
 };
 const allowedExternalPackages = new Set([
-	"@earendil-works/chord",
-	"@earendil-works/chord/bundler",
-	"@earendil-works/chord/context",
-	"@earendil-works/chord/delta",
-	"@earendil-works/chord/node",
+	"@gatanot/orrery-chord",
+	"@gatanot/orrery-chord/bundler",
+	"@gatanot/orrery-chord/context",
+	"@gatanot/orrery-chord/delta",
+	"@gatanot/orrery-chord/node",
 	"@silvia-odwyer/photon-node",
 	"jiti",
 	// Optional linkedom canvas adapter. linkedom falls back to a DOM shim when absent.
@@ -88,7 +88,7 @@ function commonBuildOptions() {
 		banner,
 		bundle: true,
 		define: { PI_BUNDLED_NODE: "true" },
-		external: ["@earendil-works/chord", "@silvia-odwyer/photon-node", "canvas"],
+		external: ["@gatanot/orrery-chord", "@silvia-odwyer/photon-node", "canvas"],
 		format: "esm",
 		legalComments: "none",
 		logLevel: "warning",

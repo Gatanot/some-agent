@@ -1,4 +1,4 @@
-import type { NativeClipboard } from "@earendil-works/pi-tui";
+import type { NativeClipboard } from "@gatanot/orrery-tui";
 import { writeFileSync } from "fs";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { readClipboardImage } from "../src/utils/clipboard-image.ts";
@@ -10,7 +10,10 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/utils/clipboard-command.ts", () => ({ runClipboardCommand: mocks.command }));
-vi.mock("@earendil-works/pi-tui", () => ({ getNativeClipboard: mocks.getNativeClipboard }));
+vi.mock("@gatanot/orrery-tui", () => ({ getNativeClipboard: mocks.getNativeClipboard }));
+vi.mock("../src/utils/wsl.ts", () => ({
+	isWSL: (env: NodeJS.ProcessEnv) => Boolean(env.WSL_DISTRO_NAME || env.WSLENV),
+}));
 
 function commandResult(stdout: Buffer, status = 0): Buffer | undefined {
 	return status === 0 ? stdout : undefined;

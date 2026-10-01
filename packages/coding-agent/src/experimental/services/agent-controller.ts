@@ -1,4 +1,4 @@
-import { type Context, defineService } from "@earendil-works/chord";
+import { type Context, defineService } from "@gatanot/orrery-chord";
 
 export interface AgentPromptImage {
 	type: "image";

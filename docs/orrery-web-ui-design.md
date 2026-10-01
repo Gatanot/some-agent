@@ -121,7 +121,8 @@
 ### 4.6 设置页面
 
 - 设置以模态面板展示，从顶栏设置按钮或未配置模型提示的「打开设置」进入。
-- 首期暴露高频 pi 配置：默认模型、默认 thinking level、按模型 thinking 覆盖、自动压缩开关、保留 token 与 keep recent token、排队模式和重试开关。
+- 首期暴露高频 pi 配置：默认模型、默认 thinking level、按模型 thinking 覆盖、按模型上下文窗口覆盖、自动压缩开关、保留 token 与 keep recent token、排队模式和重试开关。
+- 模型区按供应商列出认证与目录状态，可逐个触发模型目录拉取（`/api/providers`、`/api/models/refresh` 携带 provider id）；勾选写入 `enabledModels`，每个模型可设置上下文窗口覆盖（`modelContextWindows`，写入 `settings.json` 并立即作用于当前会话）。`models.json` 中仅配置 OpenAI 兼容 API 的供应商会调用其 `/models` 端点自动发现模型并缓存。
 - 读写当前 session 的 `SettingsManager`；写入落盘到 pi 的全局 `settings.json`，不另建一套配置。
 - 没有活动 session 时设置不可用；正在切换 session 时拒绝写入。
 

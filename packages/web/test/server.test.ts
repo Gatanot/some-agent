@@ -917,10 +917,12 @@ test("reads and updates pi settings", async () => {
 			retry: { enabled: boolean };
 			compaction: { enabled: boolean; reserveTokens: number; keepRecentTokens: number };
 			modelThinkingLevels: unknown[];
+			modelContextWindows: unknown[];
 		};
 		assert.equal(initialSettings.retry.enabled, false);
 		assert.equal(initialSettings.compaction.enabled, true);
 		assert.deepEqual(initialSettings.modelThinkingLevels, []);
+		assert.deepEqual(initialSettings.modelContextWindows, []);
 
 		const updated = await request(fixture.baseUrl, "/api/settings", {
 			method: "POST",
@@ -931,6 +933,7 @@ test("reads and updates pi settings", async () => {
 				compactionEnabled: false,
 				compactionReserveTokens: 4096,
 				modelThinkingLevels: [{ provider: "faux", id: "web-test", level: "low" }],
+				modelContextWindows: [{ provider: "faux", id: "web-test", contextWindow: 65536 }],
 			}),
 		});
 		assert.equal(updated.response.status, 200);
@@ -938,11 +941,18 @@ test("reads and updates pi settings", async () => {
 		assert.equal(updated.body.defaultModel, "web-test");
 		assert.equal(updated.body.defaultThinkingLevel, "high");
 		assert.deepEqual(updated.body.modelThinkingLevels, [{ provider: "faux", id: "web-test", level: "low" }]);
+		assert.deepEqual(updated.body.modelContextWindows, [{ provider: "faux", id: "web-test", contextWindow: 65536 }]);
 		assert.equal((updated.body.compaction as { enabled: boolean }).enabled, false);
 		assert.equal((updated.body.compaction as { reserveTokens: number }).reserveTokens, 4096);
 
 		const catalog = await request(fixture.baseUrl, "/api/models");
 		assert.ok((catalog.body.models as Array<{ id: string }>).some((model) => model.id === "web-test-2"));
+		assert.equal(
+			(catalog.body.models as Array<{ id: string; contextWindow?: number }>).find((model) => model.id === "web-test")
+				?.contextWindow,
+			65536,
+		);
+		assert.equal(fixture.sessions[0]?.model?.contextWindow, 65536);
 		const enabled = await request(fixture.baseUrl, "/api/settings", {
 			method: "POST",
 			headers: { "content-type": "application/json" },
@@ -964,6 +974,49 @@ test("reads and updates pi settings", async () => {
 			body: JSON.stringify({ modelThinkingLevels: [{ provider: "faux", id: "web-test", level: "invented" }] }),
 		});
 		assert.equal(invalid.response.status, 400);
+		const invalidContext = await request(fixture.baseUrl, "/api/settings", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				modelContextWindows: [{ provider: "faux", id: "web-test", contextWindow: 0 }],
+			}),
+		});
+		assert.equal(invalidContext.response.status, 400);
+	} finally {
+		await fixture.close();
+	}
+});
+
+test("lists providers and refreshes a single provider catalog", async () => {
+	const fixture = await createFixture([fauxAssistantMessage("unused")]);
+	try {
+		const providers = await request(fixture.baseUrl, "/api/providers");
+		assert.equal(providers.response.status, 200);
+		const faux = (providers.body.providers as Array<Record<string, unknown>>).find(
+			(provider) => provider.id === "faux",
+		);
+		assert.ok(faux, "faux provider is listed");
+		assert.equal(faux.configured, true);
+		assert.equal(faux.modelCount, 2);
+		assert.equal(faux.availableCount, 2);
+
+		const refreshed = await request(fixture.baseUrl, "/api/models/refresh", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ provider: "faux" }),
+		});
+		assert.equal(refreshed.response.status, 200);
+		assert.deepEqual(refreshed.body.errors, []);
+		assert.ok((refreshed.body.models as Array<{ id: string }>).some((model) => model.id === "web-test-2"));
+		const refreshedProviders = refreshed.body.providers as Array<{ id: string; error?: string }>;
+		assert.equal(refreshedProviders.find((provider) => provider.id === "faux")?.error, undefined);
+
+		const unknown = await request(fixture.baseUrl, "/api/models/refresh", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ provider: "missing" }),
+		});
+		assert.equal(unknown.response.status, 404);
 	} finally {
 		await fixture.close();
 	}

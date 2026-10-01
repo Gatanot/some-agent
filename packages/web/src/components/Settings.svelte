@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { RotateCw, X } from "@lucide/svelte";
-	import type { WebSettings } from "../protocol.ts";
+	import { ChevronDown, ChevronRight, RotateCcw, RotateCw, X } from "@lucide/svelte";
+	import type { WebProviderOption, WebSettings } from "../protocol.ts";
 	import type { ModelOption } from "../types.ts";
 	import { workspaceFetch } from "../workspace.ts";
 
@@ -16,12 +16,21 @@
 	let requestId = 0;
 
 	let catalog: ModelOption[] = [];
+	let providers: WebProviderOption[] = [];
+	let providerErrors: Record<string, string> = {};
+	let providerNotices: Record<string, string> = {};
+	let refreshingProvider = "";
 	let modelQuery = "";
-	let refreshing = false;
-	let refreshMessage = "";
 	let newProvider = "";
 	let newModelId = "";
 	let newLevel = "medium";
+
+	let refreshingAll = false;
+	let refreshNotice = "";
+	let showUnconfigured = false;
+	let expandedProviders: Record<string, boolean> = {};
+	let expandedModelLists: Record<string, boolean> = {};
+	const MODEL_PREVIEW_COUNT = 6;
 
 	function modelKey(model: ModelOption): string {
 		return `${model.provider}/${model.id}`;
@@ -36,6 +45,7 @@
 		if (typeof value !== "object" || value === null) return false;
 		const record = value as Record<string, unknown>;
 		if (!Array.isArray(record.modelThinkingLevels)) return false;
+		if (!Array.isArray(record.modelContextWindows)) return false;
 		const compaction = record.compaction;
 		if (typeof compaction !== "object" || compaction === null) return false;
 		const retry = record.retry;
@@ -69,12 +79,21 @@
 		catalog = payload.models ?? [];
 	}
 
+	async function loadProviders(): Promise<void> {
+		const response = await workspaceFetch("/api/providers");
+		const payload = (await response.json()) as { providers?: WebProviderOption[]; error?: string };
+		if (!response.ok) throw new Error(payload.error ?? "无法读取供应商列表");
+		providers = payload.providers ?? [];
+	}
+
 	async function loadSettings(): Promise<void> {
 		const id = ++requestId;
 		loading = true;
 		error = "";
+		providerErrors = {};
+		providerNotices = {};
 		try {
-			const [next] = await Promise.all([requestSettings("/api/settings"), loadCatalog()]);
+			const [next] = await Promise.all([requestSettings("/api/settings"), loadCatalog(), loadProviders()]);
 			if (id === requestId) settings = next;
 		} catch (cause) {
 			if (id === requestId) error = cause instanceof Error ? cause.message : String(cause);
@@ -99,20 +118,71 @@
 		}
 	}
 
-	async function refreshModels(): Promise<void> {
-		refreshing = true;
-		error = "";
-		refreshMessage = "";
+	async function refreshProvider(provider: string): Promise<void> {
+		if (!provider) return;
+		refreshingProvider = provider;
+		providerErrors = { ...providerErrors, [provider]: "" };
+		providerNotices = { ...providerNotices, [provider]: "" };
 		try {
-			const response = await workspaceFetch("/api/models/refresh", { method: "POST" });
-			const payload = (await response.json()) as { errors?: string[]; error?: string };
-			if (!response.ok) throw new Error(payload.error ?? "刷新失败");
-			await loadCatalog();
-			refreshMessage = payload.errors?.length ? payload.errors.join("; ") : "模型目录已刷新";
+			const response = await workspaceFetch("/api/models/refresh", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify({ provider }),
+			});
+			const payload = (await response.json().catch(() => ({}))) as {
+				errors?: string[];
+				error?: string;
+				providers?: WebProviderOption[];
+				models?: ModelOption[];
+			};
+			if (!response.ok) throw new Error(payload.error ?? `刷新失败 (${response.status})`);
+			if (payload.providers) providers = payload.providers;
+			if (payload.models) catalog = payload.models;
+			else await loadCatalog();
+			const failure = (payload.errors ?? []).find((entry) => entry.startsWith(`${provider}:`));
+			providerErrors = { ...providerErrors, [provider]: failure ?? "" };
+			providerNotices = { ...providerNotices, [provider]: failure ? "" : "已拉取模型目录" };
+		} catch (cause) {
+			providerErrors = {
+				...providerErrors,
+				[provider]: cause instanceof Error ? cause.message : String(cause),
+			};
+		} finally {
+			refreshingProvider = "";
+		}
+	}
+
+	async function refreshAll(): Promise<void> {
+		if (refreshingAll) return;
+		refreshingAll = true;
+		refreshNotice = "";
+		error = "";
+		try {
+			const response = await workspaceFetch("/api/models/refresh", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: "{}",
+			});
+			const payload = (await response.json().catch(() => ({}))) as {
+				errors?: string[];
+				error?: string;
+				providers?: WebProviderOption[];
+				models?: ModelOption[];
+			};
+			if (!response.ok) throw new Error(payload.error ?? `刷新失败 (${response.status})`);
+			if (payload.providers) providers = payload.providers;
+			else await loadProviders();
+			if (payload.models) catalog = payload.models;
+			else await loadCatalog();
+			providerErrors = {};
+			providerNotices = {};
+			const failures = payload.errors ?? [];
+			refreshNotice =
+				failures.length > 0 ? `目录拉取完成，${failures.length} 个供应商失败` : "已拉取全部已配置供应商的模型目录";
 		} catch (cause) {
 			error = cause instanceof Error ? cause.message : String(cause);
 		} finally {
-			refreshing = false;
+			refreshingAll = false;
 		}
 	}
 
@@ -121,6 +191,14 @@
 		const key = modelKey(model);
 		const current = settings.enabledModels ?? catalog.map(modelKey);
 		const next = checked ? [...new Set([...current, key])] : current.filter((entry) => entry !== key);
+		void patch({ enabledModels: next });
+	}
+
+	function toggleProviderModels(group: ProviderGroup, checked: boolean): void {
+		if (!settings) return;
+		const keys = new Set(group.allModels.map(modelKey));
+		const current = settings.enabledModels ?? catalog.map(modelKey);
+		const next = checked ? [...new Set([...current, ...keys])] : current.filter((entry) => !keys.has(entry));
 		void patch({ enabledModels: next });
 	}
 
@@ -137,6 +215,27 @@
 		const parsed = Number.parseInt(raw, 10);
 		if (!Number.isInteger(parsed) || parsed < 0) return;
 		void patch({ [patchKey]: parsed });
+	}
+
+	function contextOverride(model: ModelOption): string {
+		const entry = settings?.modelContextWindows.find(
+			(item) => item.provider === model.provider && item.id === model.id,
+		);
+		return entry ? String(entry.contextWindow) : "";
+	}
+
+	function saveContextWindow(model: ModelOption, raw: string): void {
+		if (!settings) return;
+		const trimmed = raw.trim();
+		const next = settings.modelContextWindows.filter(
+			(entry) => !(entry.provider === model.provider && entry.id === model.id),
+		);
+		if (trimmed !== "") {
+			const parsed = Number.parseInt(trimmed, 10);
+			if (!Number.isInteger(parsed) || parsed <= 0 || String(parsed) !== trimmed) return;
+			next.push({ provider: model.provider, id: model.id, contextWindow: parsed });
+		}
+		void patch({ modelContextWindows: next });
 	}
 
 	function updateOverride(provider: string, id: string, level: string): void {
@@ -165,11 +264,139 @@
 		void patch({ modelThinkingLevels: next });
 	}
 
+	interface ProviderGroup {
+		id: string;
+		name: string;
+		configured: boolean;
+		canRefresh: boolean;
+		modelCount: number;
+		availableCount: number;
+		allModels: ModelOption[];
+		models: ModelOption[];
+		enabledCount: number;
+		expanded: boolean;
+		modelsExpanded: boolean;
+		error: string;
+		notice: string;
+	}
+
+	function providerMeta(group: ProviderGroup): string {
+		const parts = [`${group.availableCount}/${group.modelCount} 可用`];
+		if (group.configured) parts.push(`已启用 ${group.enabledCount}/${group.allModels.length}`);
+		else parts.push("未配置认证");
+		return parts.join(" · ");
+	}
+
+	function matchesQuery(model: ModelOption, query: string): boolean {
+		if (!query) return true;
+		return `${model.provider}/${model.id} ${model.name}`.toLowerCase().includes(query.toLowerCase());
+	}
+
+	function isModelEnabled(model: ModelOption, enabledModels: string[] | undefined): boolean {
+		return enabledModels === undefined || enabledModels.includes(modelKey(model));
+	}
+
+	function buildProviderGroups(
+		providerOptions: WebProviderOption[],
+		models: ModelOption[],
+		enabledModels: string[] | undefined,
+		query: string,
+		errors: Record<string, string>,
+		notices: Record<string, string>,
+		includeUnconfigured: boolean,
+		expanded: Record<string, boolean>,
+		expandedLists: Record<string, boolean>,
+	): ProviderGroup[] {
+		const knownProviders = new Set(providerOptions.map((provider) => provider.id));
+		const extraProviders: WebProviderOption[] = [...new Set(models.map((model) => model.provider))]
+			.filter((provider) => !knownProviders.has(provider))
+			.map((provider) => ({ id: provider, name: provider, configured: true, canRefresh: false, modelCount: 0, availableCount: 0 }));
+		const makeGroup = (provider: WebProviderOption): ProviderGroup => {
+			const allModels = models.filter((model) => model.provider === provider.id);
+			return {
+				id: provider.id,
+				name: provider.name,
+				configured: provider.configured,
+				canRefresh: provider.canRefresh,
+				modelCount: provider.modelCount || allModels.length,
+				availableCount: provider.availableCount || allModels.length,
+				allModels,
+				models: allModels.filter((model) => matchesQuery(model, query)),
+				enabledCount: allModels.filter((model) => isModelEnabled(model, enabledModels)).length,
+				expanded: expanded[provider.id] ?? provider.configured,
+				modelsExpanded: expandedLists[provider.id] ?? false,
+				error: errors[provider.id] || provider.error || "",
+				notice: notices[provider.id] || "",
+			};
+		};
+		return [...providerOptions, ...extraProviders]
+			.map(makeGroup)
+			.filter((group) => {
+				const normalized = query.toLowerCase();
+				if (normalized) {
+					return (
+						group.models.length > 0 ||
+						group.id.toLowerCase().includes(normalized) ||
+						group.name.toLowerCase().includes(normalized)
+					);
+				}
+				return group.configured || includeUnconfigured;
+			})
+			.sort(
+				(a, b) =>
+					Number(b.configured) - Number(a.configured) ||
+					a.name.localeCompare(b.name) ||
+					a.id.localeCompare(b.id),
+			);
+	}
+
+	function visibleModels(group: ProviderGroup): ModelOption[] {
+		if (modelQuery || group.modelsExpanded) return group.models;
+		return group.models.slice(0, MODEL_PREVIEW_COUNT);
+	}
+
+	function toggleExpandedProvider(group: ProviderGroup): void {
+		expandedProviders = { ...expandedProviders, [group.id]: !group.expanded };
+	}
+
+	function toggleModelList(group: ProviderGroup): void {
+		expandedModelLists = { ...expandedModelLists, [group.id]: !group.modelsExpanded };
+	}
+
+	function useIndeterminate(node: HTMLInputElement, value: boolean) {
+		node.indeterminate = value;
+		return {
+			update(next: boolean): void {
+				node.indeterminate = next;
+			},
+		};
+	}
+
 	$: defaultModelValue = settings?.defaultProvider && settings.defaultModel ? `${settings.defaultProvider}/${settings.defaultModel}` : "";
+	$: enabledModelKeys = settings?.enabledModels;
 	$: availableModels = [...new Set(catalog.map((model) => model.provider))].map((provider) => ({
 		provider,
 		models: catalog.filter((model) => model.provider === provider),
 	}));
+	$: selectableModelGroups = [...new Set(catalog.map((model) => model.provider))]
+		.map((provider) => ({
+			provider,
+			models: catalog.filter((model) => model.provider === provider && isModelEnabled(model, enabledModelKeys)),
+		}))
+		.filter((group) => group.models.length > 0);
+	$: unconfiguredCount = providers.filter((provider) => !provider.configured).length;
+	$: providerGroups = buildProviderGroups(
+		providers,
+		catalog,
+		enabledModelKeys,
+		modelQuery,
+		providerErrors,
+		providerNotices,
+		showUnconfigured,
+		expandedProviders,
+		expandedModelLists,
+	);
+
 	let wasOpen = false;
 	$: if (open && !wasOpen) {
 		wasOpen = true;
@@ -203,7 +430,7 @@
 						<span>默认模型</span>
 						<select disabled={saving} value={defaultModelValue} on:change={(event) => saveDefaultModel(event.currentTarget.value)}>
 							<option value="">保持当前默认值</option>
-							{#each availableModels as group (group.provider)}
+							{#each selectableModelGroups as group (group.provider)}
 								<optgroup label={group.provider}>
 									{#each group.models as model (`${model.provider}/${model.id}`)}
 										<option value={modelKey(model)}>{model.name}</option>
@@ -224,20 +451,95 @@
 				</section>
 
 				<section class="settings-section">
-					<div class="settings-section-head"><h3>常用模型</h3><button class="icon-button" type="button" aria-label="从提供商刷新模型目录" title="从提供商刷新模型目录" disabled={refreshing || saving} on:click={refreshModels}><RotateCw size={16} /></button></div>
-					<p class="settings-note">仅控制模型轮换范围，不会撤销认证或禁用模型调用。未设置时全部可用模型默认选中。</p>
-					{#if refreshMessage}<p class="settings-note" role="status">{refreshMessage}</p>{/if}
-					<input class="model-search" type="search" bind:value={modelQuery} aria-label="搜索模型" placeholder="搜索提供商或模型" />
-					<div class="model-list">
-						{#each availableModels as group (group.provider)}
-							{#if group.models.some((model) => `${model.provider}/${model.id} ${model.name}`.toLowerCase().includes(modelQuery.toLowerCase()))}
-								<h4>{group.provider}</h4>
-								{#each group.models.filter((model) => `${model.provider}/${model.id} ${model.name}`.toLowerCase().includes(modelQuery.toLowerCase())) as model (`${model.provider}/${model.id}`)}
-									<label class="settings-check"><input type="checkbox" checked={settings.enabledModels === undefined ? true : settings.enabledModels.includes(modelKey(model))} disabled={saving} on:change={(event) => toggleModel(model, event.currentTarget.checked)} /><span>{model.name} <small>{model.id}</small></span></label>
-								{/each}
-							{/if}
-						{/each}
+					<div class="settings-section-head">
+						<h3>供应商与模型</h3>
+						<button
+							class="secondary-button"
+							type="button"
+							disabled={saving || refreshingAll || refreshingProvider !== ""}
+							title="从所有已配置的供应商拉取模型目录"
+							on:click={refreshAll}
+						>
+							<RotateCw size={14} class={refreshingAll ? "spin" : ""} />
+							{refreshingAll ? "拉取中…" : "拉取全部"}
+						</button>
 					</div>
+					<p class="settings-note">从供应商拉取可用模型目录，勾选要启用的模型；只有启用的模型显示上下文字段，留空时使用目录值。</p>
+					<div class="model-toolbar">
+						<input class="model-search" type="search" bind:value={modelQuery} aria-label="搜索模型" placeholder="搜索供应商或模型" />
+						<label class="settings-check compact" title="显示没有配置认证的供应商">
+							<input type="checkbox" bind:checked={showUnconfigured} />
+							<span>未配置 ({unconfiguredCount})</span>
+						</label>
+					</div>
+					{#if refreshNotice}<div class="provider-notice">{refreshNotice}</div>{/if}
+					{#each providerGroups as group (group.id)}
+						<div class="provider-block" class:unconfigured={!group.configured}>
+							<div class="provider-head">
+								<button class="provider-toggle" type="button" aria-expanded={group.expanded} on:click={() => toggleExpandedProvider(group)}>
+									{#if group.expanded}<ChevronDown size={14} />{:else}<ChevronRight size={14} />{/if}
+									<span class="provider-identity">
+										<strong>{group.name}</strong>
+										<span class="provider-meta">{providerMeta(group)}</span>
+									</span>
+								</button>
+								<div class="provider-actions">
+									{#if group.allModels.length > 0}
+										<label class="settings-check compact" title={`启用或停用 ${group.name} 的全部模型`}>
+											<input
+												type="checkbox"
+												checked={group.enabledCount === group.allModels.length}
+												use:indeterminate={group.enabledCount > 0 && group.enabledCount < group.allModels.length}
+												disabled={saving}
+												on:change={(event) => toggleProviderModels(group, event.currentTarget.checked)}
+											/>
+											<span>全选</span>
+										</label>
+									{/if}
+									<button
+										class="icon-button"
+										type="button"
+										title={group.canRefresh ? `从 ${group.name} 拉取模型目录` : `刷新 ${group.name} 的可用性`}
+										aria-label={group.canRefresh ? `从 ${group.name} 拉取模型目录` : `刷新 ${group.name} 的可用性`}
+										disabled={saving || refreshingAll || refreshingProvider === group.id}
+										on:click={() => refreshProvider(group.id)}
+									><RotateCw size={15} class={refreshingProvider === group.id ? "spin" : ""} /></button>
+								</div>
+							</div>
+							{#if group.error}<div class="provider-error">{group.error}</div>{/if}
+							{#if group.notice}<div class="provider-notice">{group.notice}</div>{/if}
+							{#if group.expanded}
+								{#if group.models.length === 0}
+									<p class="settings-note">{modelQuery ? "没有匹配的模型。" : group.configured ? "没有可用模型。" : "未配置认证，无法列出可用模型。"}</p>
+								{:else}
+									<div class="model-list">
+										{#each visibleModels(group) as model (`${model.provider}/${model.id}`)}
+											<div class="model-row">
+												<label class="settings-check"><input type="checkbox" checked={isModelEnabled(model, enabledModelKeys)} disabled={saving} on:change={(event) => toggleModel(model, event.currentTarget.checked)} /><span>{model.name} <small>{model.id}</small></span></label>
+												{#if isModelEnabled(model, enabledModelKeys)}
+													<div class="context-field" title={`${model.name} 的上下文窗口（tokens），留空使用目录值`}>
+														<input type="number" min="1" step="1024" value={contextOverride(model)} placeholder={model.contextWindow ? String(model.contextWindow) : "默认"} disabled={saving} on:change={(event) => saveContextWindow(model, event.currentTarget.value)} />
+														<span>context</span>
+														{#if contextOverride(model)}
+															<button class="context-reset" type="button" title="恢复目录上下文窗口" aria-label="恢复目录上下文窗口" disabled={saving} on:click={() => saveContextWindow(model, "")}><RotateCcw size={13} /></button>
+														{/if}
+													</div>
+												{/if}
+											</div>
+										{/each}
+									</div>
+									{#if !modelQuery && group.models.length > MODEL_PREVIEW_COUNT}
+										<button class="quiet-button model-more" type="button" on:click={() => toggleModelList(group)}>
+											{group.modelsExpanded ? "收起" : `显示其余 ${group.models.length - MODEL_PREVIEW_COUNT} 个`}
+										</button>
+									{/if}
+								{/if}
+							{/if}
+						</div>
+					{/each}
+					{#if providerGroups.length === 0}
+						<p class="settings-note">没有匹配的供应商。</p>
+					{/if}
 				</section>
 
 				<section class="settings-section">

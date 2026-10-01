@@ -113,6 +113,7 @@ export interface Settings {
 	defaultModel?: string;
 	defaultThinkingLevel?: ThinkingLevel;
 	modelThinkingLevels?: Record<string, ThinkingLevel>; // per-model default thinking level overrides keyed by "provider/modelId"
+	modelContextWindows?: Record<string, number>; // per-model context window overrides keyed by "provider/modelId"
 	transport?: TransportSetting; // default: "auto"
 	steeringMode?: "all" | "one-at-a-time";
 	followUpMode?: "all" | "one-at-a-time";
@@ -830,6 +831,51 @@ export class SettingsManager {
 			delete this.globalSettings.modelThinkingLevels;
 		}
 		this.markModified("modelThinkingLevels");
+		this.save();
+	}
+
+	private assertModelContextWindow(key: string, value: unknown): number {
+		if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+			throw new Error(
+				`Invalid modelContextWindows["${key}"] setting: ${String(value)}. Expected a positive safe integer.`,
+			);
+		}
+		return value;
+	}
+
+	/** Model-specific context window override, or undefined when the catalog value applies. */
+	getModelContextWindow(provider: string, modelId: string): number | undefined {
+		const key = `${provider}/${modelId}`;
+		const value = this.settings.modelContextWindows?.[key];
+		return value === undefined ? undefined : this.assertModelContextWindow(key, value);
+	}
+
+	getAllModelContextWindows(): Record<string, number> {
+		const source = this.settings.modelContextWindows ?? {};
+		const result: Record<string, number> = {};
+		for (const [key, value] of Object.entries(source)) {
+			result[key] = this.assertModelContextWindow(key, value);
+		}
+		return result;
+	}
+
+	setModelContextWindow(provider: string, modelId: string, contextWindow: number): void {
+		if (!Number.isSafeInteger(contextWindow) || contextWindow <= 0) {
+			throw new Error(`Invalid context window for ${provider}/${modelId}: ${String(contextWindow)}`);
+		}
+		this.globalSettings.modelContextWindows ??= {};
+		this.globalSettings.modelContextWindows[`${provider}/${modelId}`] = contextWindow;
+		this.markModified("modelContextWindows");
+		this.save();
+	}
+
+	removeModelContextWindow(provider: string, modelId: string): void {
+		if (!this.globalSettings.modelContextWindows) return;
+		delete this.globalSettings.modelContextWindows[`${provider}/${modelId}`];
+		if (Object.keys(this.globalSettings.modelContextWindows).length === 0) {
+			delete this.globalSettings.modelContextWindows;
+		}
+		this.markModified("modelContextWindows");
 		this.save();
 	}
 

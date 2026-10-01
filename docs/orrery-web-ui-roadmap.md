@@ -103,7 +103,7 @@
 - [x] 工具结果中的图片展示：`read` 等工具返回的 image part 在工具卡片内渲染为图片（含展开计数徽标），对话消息中的 image part 渲染为图片；数据来自已有快照，不改动 pi。
 - [x] `@` 文件引用：输入栏输入 `@` 时由服务端 `/api/files` 返回项目文件建议（优先 `git ls-files`，非 Git 目录回退到目录遍历），方向键/回车选择后插入 `@path`；提交后由 agent 自行读取，不在浏览器内联文件内容。图片附件输入暂不做。
 - [x] 运行中提交排队为 follow-up：输入栏有内容时只显示发送图标，提交后在当前任务结束后执行；输入栏为空时只显示停止图标。
-- [x] 设置页面：默认模型、默认 thinking level、按模型 thinking 覆盖、自动压缩开关与保留 token、排队模式与重试开关；服务端 `/api/settings` 读写当前 `SettingsManager`，写入写回全局配置。
+- [x] 设置页面：默认模型、默认 thinking level、按模型 thinking 覆盖、按模型上下文窗口覆盖、自动压缩开关与保留 token、排队模式与重试开关；服务端 `/api/settings` 读写当前 `SettingsManager`，上下文写入 `modelContextWindows` 并立即作用于当前会话。模型区按供应商展示 `/api/providers` 状态并逐个拉取目录，`/api/models/refresh` 接受 provider id；`models.json` 中仅配置 OpenAI 兼容 API 的供应商通过 `/models` 动态发现并缓存模型。
 - [ ] session tree、fork 和分支导航（暂缓，待有实际需求再开发）。
 - [ ] 扩展通知、选择、确认、输入请求的 Web 适配。
 

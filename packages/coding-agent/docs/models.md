@@ -65,6 +65,8 @@ The dummy key makes the model available to Pi; Ollama ignores it. For an authent
 
 Opening `/model` reloads the file. A `models` entry adds or replaces a model with the same ID on that provider. Use `modelOverrides` to change metadata for an existing built-in or extension-provided model without replacing the provider's model list. Unknown override IDs are ignored.
 
+Providers configured only in `models.json` with an OpenAI-compatible `api` (`openai-completions` or `openai-responses`) can also list their catalog dynamically. Pi calls `{baseUrl}/models` with the resolved provider credential, adds the returned IDs, and caches the result in `models-store.json`. Use this when a relay or local server adds models without a Pi release. Refreshing through the Web settings page forces a fresh list. Discovered models start with a 128000-token context window and no cost; correct them with [`modelContextWindows`](settings.md#per-model-context-window-overrides) or a `models` entry.
+
 ### Describe model input and caching
 
 Use `inputLimits.images.resize` to control how Pi encodes new image attachments, `read` results, and tool-result images before storing them in conversation history:

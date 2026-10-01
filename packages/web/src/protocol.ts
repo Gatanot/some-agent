@@ -121,12 +121,30 @@ export interface WebSettingsModelThinkingLevel {
 	level: string;
 }
 
+export interface WebSettingsModelContextWindow {
+	provider: string;
+	id: string;
+	contextWindow: number;
+}
+
+/** Provider catalog status surfaced in the web settings page. */
+export interface WebProviderOption {
+	id: string;
+	name: string;
+	configured: boolean;
+	canRefresh: boolean;
+	modelCount: number;
+	availableCount: number;
+	error?: string;
+}
+
 /** Editable pi settings surfaced in the web settings page. */
 export interface WebSettings {
 	defaultProvider?: string;
 	defaultModel?: string;
 	defaultThinkingLevel?: string;
 	modelThinkingLevels: WebSettingsModelThinkingLevel[];
+	modelContextWindows: WebSettingsModelContextWindow[];
 	enabledModels?: string[];
 	compaction: { enabled: boolean; reserveTokens: number; keepRecentTokens: number };
 	steeringMode: "all" | "one-at-a-time";
@@ -138,6 +156,7 @@ export type WebSettingsPatch = Partial<{
 	defaultModel: { provider: string; id: string } | null;
 	defaultThinkingLevel: string | null;
 	modelThinkingLevels: WebSettingsModelThinkingLevel[];
+	modelContextWindows: WebSettingsModelContextWindow[];
 	enabledModels: string[];
 	compactionEnabled: boolean;
 	compactionReserveTokens: number;

@@ -8,6 +8,9 @@
 
 - Orrery local web UI with session management, usage inspector, and workspace picker.
 - Bundled Orrery branding extension, themes, and startup splash.
+- Per-model context window overrides through the `modelContextWindows` setting, applied to the active session so context usage, compaction thresholds, and overflow recovery use the configured window. See [Settings](docs/settings.md#per-model-context-window-overrides).
+- Dynamic model discovery for `models.json` providers with an OpenAI-compatible API: Pi lists `{baseUrl}/models`, adds the returned IDs, and caches them in `models-store.json`. See [Choose a Model](docs/models.md#configure-a-compatible-endpoint).
+- Web settings page lists every provider with its catalog status, fetches one provider catalog at a time, and edits per-model context windows.
 
 ### Changed
 

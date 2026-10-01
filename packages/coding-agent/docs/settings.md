@@ -12,6 +12,7 @@ This reference lists user-configurable settings, their types, defaults, and purp
 | `defaultModel` | string | Automatic | Startup model ID. |
 | `defaultThinkingLevel` | `"off" \| "minimal" \| "low" \| "medium" \| "high" \| "xhigh" \| "max"` | `"medium"` | Startup thinking level. |
 | `modelThinkingLevels` | object | None | Per-model startup thinking levels keyed by exact `provider/modelId`. |
+| `modelContextWindows` | object | None | Per-model context window overrides in tokens, keyed by exact `provider/modelId`. |
 | `thinkingBudgets` | object | Built-in budgets | Token budgets for `minimal`, `low`, `medium`, and `high` thinking levels. |
 | `enabledModels` | `string[]` | All available models | Model patterns used for startup selection and model cycling. Uses the same format as `--models`. |
 | `hideThinkingBlock` | boolean | `false` | Hide thinking blocks in the transcript. |
@@ -21,6 +22,20 @@ This reference lists user-configurable settings, their types, defaults, and purp
 Cache warming runs only when the model declares a cache lifetime and Pi estimates at least $0.05 in avoided cache-miss cost. Refresh usage counts toward session totals but does not enter model context. `/session` shows the next decision; extensions can override it with `cache_warming_decision`. See [Prompt Cache Lifetimes](models.md#prompt-cache-lifetimes).
 
 See [Choose a Model](models.md) for model selection and thinking controls.
+
+### Per-model context window overrides
+
+Use `modelContextWindows` when a provider catalog reports the wrong context limit for a model, for example for a compatible endpoint or a relay with a different window than the upstream model:
+
+```json
+{
+  "modelContextWindows": {
+    "catsco/claude-sonnet-5-5": 393216
+  }
+}
+```
+
+Values must be positive safe integers. An override applies to the model object the session uses, so context usage, automatic compaction thresholds, and overflow recovery all use it. Removing the entry falls back to the catalog value. Keys are exact, case-sensitive `provider/modelId` values, including any slashes within the model ID. The `models.json` `modelOverrides` mechanism remains the place to override other model metadata.
 
 ## Interaction
 

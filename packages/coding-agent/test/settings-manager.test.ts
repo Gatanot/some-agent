@@ -39,6 +39,51 @@ describe("SettingsManager", () => {
 		expect(saved.compaction).toEqual({ enabled: false, reserveTokens: 4096, keepRecentTokens: 0 });
 	});
 
+	it("persists per-model context window overrides", async () => {
+		const manager = SettingsManager.create(projectDir, agentDir);
+		expect(manager.getModelContextWindow("provider", "model")).toBeUndefined();
+		expect(manager.getAllModelContextWindows()).toEqual({});
+
+		manager.setModelContextWindow("provider", "model", 393216);
+		manager.setModelContextWindow("provider", "model/with/slashes", 128000);
+		await manager.flush();
+
+		expect(manager.getModelContextWindow("provider", "model")).toBe(393216);
+		expect(manager.getModelContextWindow("provider", "model/with/slashes")).toBe(128000);
+		expect(manager.getAllModelContextWindows()).toEqual({
+			"provider/model": 393216,
+			"provider/model/with/slashes": 128000,
+		});
+		const saved = JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf-8"));
+		expect(saved.modelContextWindows).toEqual({
+			"provider/model": 393216,
+			"provider/model/with/slashes": 128000,
+		});
+
+		manager.removeModelContextWindow("provider", "model");
+		await manager.flush();
+		expect(manager.getModelContextWindow("provider", "model")).toBeUndefined();
+		expect(manager.getModelContextWindow("provider", "model/with/slashes")).toBe(128000);
+
+		manager.removeModelContextWindow("provider", "model/with/slashes");
+		await manager.flush();
+		const cleaned = JSON.parse(readFileSync(join(agentDir, "settings.json"), "utf-8"));
+		expect(cleaned.modelContextWindows).toBeUndefined();
+	});
+
+	it("rejects invalid per-model context window values", () => {
+		const manager = SettingsManager.create(projectDir, agentDir);
+		expect(() => manager.setModelContextWindow("provider", "model", 0)).toThrow(/Invalid context window/);
+		expect(() => manager.setModelContextWindow("provider", "model", -1)).toThrow(/Invalid context window/);
+		expect(() => manager.setModelContextWindow("provider", "model", Number.NaN)).toThrow(/Invalid context window/);
+
+		const invalid = SettingsManager.inMemory({
+			modelContextWindows: { "provider/model": 1.5 },
+		});
+		expect(() => invalid.getAllModelContextWindows()).toThrow(/Invalid modelContextWindows/);
+		expect(() => invalid.getModelContextWindow("provider", "model")).toThrow(/Invalid modelContextWindows/);
+	});
+
 	describe("preserves externally added settings", () => {
 		it("should preserve enabledModels when changing thinking level", async () => {
 			// Create initial settings file

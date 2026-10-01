@@ -16,12 +16,15 @@ import { readGitDiff, readGitStatus } from "./git.ts";
 import type {
 	WebEventEnvelope,
 	WebGitState,
+	WebModelOption,
+	WebProviderOption,
 	WebSessionMatch,
 	WebSessionSearchResponse,
 	WebSessionStats,
 	WebSessionSummary,
 	WebSessionsResponse,
 	WebSettings,
+	WebSettingsModelContextWindow,
 	WebSettingsModelThinkingLevel,
 	WebSnapshot,
 	WebSnapshotDelta,
@@ -77,6 +80,7 @@ interface WorkspaceRuntime {
 	usageCache: Map<string, { modified: number; since: number; summary: UsageSummary }>;
 	deletedSessionUsage: Map<string, SessionEntry[]>;
 	recentWorkspaces: string[];
+	providerRefreshErrors: Map<string, string>;
 	lastUsed: number;
 	subscribers: Set<SseSubscriber>;
 }
@@ -95,6 +99,7 @@ function createWorkspaceRuntime(id: string, directory: string): WorkspaceRuntime
 		usageCache: new Map(),
 		deletedSessionUsage: new Map(),
 		recentWorkspaces: [directory],
+		providerRefreshErrors: new Map(),
 		lastUsed: Date.now(),
 		subscribers: new Set(),
 	};
@@ -346,6 +351,9 @@ function settingsView(manager: SettingsManager): WebSettings {
 	const modelThinkingLevels: WebSettingsModelThinkingLevel[] = Object.entries(manager.getAllModelThinkingLevels()).map(
 		([key, level]) => ({ ...splitModelThinkingKey(key), level }),
 	);
+	const modelContextWindows: WebSettingsModelContextWindow[] = Object.entries(manager.getAllModelContextWindows()).map(
+		([key, contextWindow]) => ({ ...splitModelThinkingKey(key), contextWindow }),
+	);
 	const defaultProvider = manager.getDefaultProvider();
 	const defaultModel = manager.getDefaultModel();
 	const defaultThinkingLevel = manager.getDefaultThinkingLevel();
@@ -354,6 +362,7 @@ function settingsView(manager: SettingsManager): WebSettings {
 		...(defaultModel ? { defaultModel } : {}),
 		...(defaultThinkingLevel ? { defaultThinkingLevel } : {}),
 		modelThinkingLevels,
+		modelContextWindows,
 		...(manager.getEnabledModels() ? { enabledModels: manager.getEnabledModels() } : {}),
 		compaction: manager.getCompactionSettings(),
 		steeringMode: manager.getSteeringMode(),
@@ -410,6 +419,32 @@ function applySettingsPatch(manager: SettingsManager, body: Record<string, unkno
 			manager.removeModelThinkingLevel(provider, id);
 		}
 		for (const entry of entries) manager.setModelThinkingLevel(entry.provider, entry.id, entry.level);
+	}
+
+	if ("modelContextWindows" in body) {
+		const value = body.modelContextWindows;
+		if (!Array.isArray(value)) throw new HttpRequestError(400, "modelContextWindows must be an array");
+		const entries = value.map((entry) => {
+			if (
+				!isPlainObject(entry) ||
+				typeof entry.provider !== "string" ||
+				typeof entry.id !== "string" ||
+				typeof entry.contextWindow !== "number" ||
+				!Number.isSafeInteger(entry.contextWindow) ||
+				entry.contextWindow <= 0
+			) {
+				throw new HttpRequestError(
+					400,
+					"Each modelContextWindows entry needs provider, id and a positive contextWindow",
+				);
+			}
+			return { provider: entry.provider, id: entry.id, contextWindow: entry.contextWindow };
+		});
+		for (const key of Object.keys(manager.getAllModelContextWindows())) {
+			const { provider, id } = splitModelThinkingKey(key);
+			manager.removeModelContextWindow(provider, id);
+		}
+		for (const entry of entries) manager.setModelContextWindow(entry.provider, entry.id, entry.contextWindow);
 	}
 
 	if ("compactionEnabled" in body) {
@@ -610,19 +645,51 @@ function sessionStatsView(): WebSessionStats | undefined {
 	};
 }
 
-function sessionState(): WebSnapshot {
-	const currentSession = runtime().session;
-	const availableModels = currentSession?.modelRuntime.getAvailableSnapshot() ?? [];
-	const enabled = currentSession?.settingsManager.getEnabledModels();
-	const activeModel = currentSession?.model;
+function modelOptions(session: AgentSession | undefined, filterEnabled = false): WebModelOption[] {
+	if (!session) return [];
+	const availableModels = session.modelRuntime.getAvailableSnapshot();
+	const enabled = session.settingsManager.getEnabledModels();
+	const activeModel = session.model;
 	const models =
-		enabled === undefined
+		!filterEnabled || enabled === undefined
 			? availableModels
 			: availableModels.filter(
 					(model) =>
 						enabled.includes(`${model.provider}/${model.id}`) ||
 						(model.provider === activeModel?.provider && model.id === activeModel?.id),
 				);
+	return models.map((model) => ({
+		provider: model.provider,
+		id: model.id,
+		name: model.name,
+		contextWindow: session.settingsManager.getModelContextWindow(model.provider, model.id) ?? model.contextWindow,
+	}));
+}
+
+/** Provider catalog status for the settings page; includes providers without usable auth. */
+function providerViews(): WebProviderOption[] {
+	const currentSession = runtime().session;
+	if (!currentSession) return [];
+	const availableModels = currentSession.modelRuntime.getAvailableSnapshot();
+	return currentSession.modelRuntime
+		.getProviders()
+		.map((provider) => ({
+			id: provider.id,
+			name: provider.name,
+			configured: currentSession.modelRuntime.hasConfiguredAuth(provider.id),
+			canRefresh: provider.refreshModels !== undefined,
+			modelCount: currentSession.modelRuntime.getModels(provider.id).length,
+			availableCount: availableModels.filter((model) => model.provider === provider.id).length,
+			...(runtime().providerRefreshErrors.has(provider.id)
+				? { error: runtime().providerRefreshErrors.get(provider.id) }
+				: {}),
+		}))
+		.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+}
+
+function sessionState(): WebSnapshot {
+	const currentSession = runtime().session;
+	const activeModel = currentSession?.model;
 	const thinkingLevels = currentSession?.getAvailableThinkingLevels() ?? [];
 	const sessionStats = sessionStatsView();
 	return {
@@ -633,12 +700,7 @@ function sessionState(): WebSnapshot {
 		toolExecutions: snapshotExecutions(),
 		git: runtime().gitState,
 		...(activeModel ? { model: { provider: activeModel.provider, id: activeModel.id } } : {}),
-		models: models.map((model) => ({
-			provider: model.provider,
-			id: model.id,
-			name: model.name,
-			contextWindow: model.contextWindow,
-		})),
+		models: modelOptions(currentSession, true),
 		thinkingLevels,
 		...(sessionStats ? { sessionStats } : {}),
 	};
@@ -1061,17 +1123,12 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 	}
 
 	if (url.pathname === "/api/models" && request.method === "GET") {
-		sendJson(response, 200, {
-			models:
-				runtime()
-					.session?.modelRuntime.getAvailableSnapshot()
-					.map((model) => ({
-						provider: model.provider,
-						id: model.id,
-						name: model.name,
-						contextWindow: model.contextWindow,
-					})) ?? [],
-		});
+		sendJson(response, 200, { models: modelOptions(runtime().session) });
+		return;
+	}
+
+	if (url.pathname === "/api/providers" && request.method === "GET") {
+		sendJson(response, 200, { providers: providerViews() });
 		return;
 	}
 
@@ -1090,12 +1147,43 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 			sendJson(response, 503, { error: "No active session" });
 			return;
 		}
+		let body: Record<string, unknown>;
 		try {
-			const result = await currentSession.modelRuntime.refresh({ force: true, allowNetwork: true });
+			body = await readBody(request);
+		} catch (error) {
+			const status = error instanceof HttpRequestError ? error.status : 400;
+			sendJson(response, status, { error: error instanceof Error ? error.message : String(error) });
+			return;
+		}
+		if (body.provider !== undefined && (typeof body.provider !== "string" || !body.provider.trim())) {
+			sendJson(response, 400, { error: "provider must be a provider id" });
+			return;
+		}
+		const provider = typeof body.provider === "string" ? body.provider.trim() : undefined;
+		if (provider && !currentSession.modelRuntime.getProvider(provider)) {
+			sendJson(response, 404, { error: `Unknown provider: ${provider}` });
+			return;
+		}
+		try {
+			const result = await currentSession.modelRuntime.refresh({
+				force: true,
+				allowNetwork: true,
+				...(provider ? { providers: [provider] } : {}),
+			});
+			if (provider) {
+				const error = result.errors.get(provider);
+				if (error) runtime().providerRefreshErrors.set(provider, error.message);
+				else runtime().providerRefreshErrors.delete(provider);
+			} else {
+				runtime().providerRefreshErrors.clear();
+				for (const [id, error] of result.errors) runtime().providerRefreshErrors.set(id, error.message);
+			}
 			runtime().sequence += 1;
 			broadcastSnapshot();
 			sendJson(response, 200, {
-				errors: [...result.errors].map(([provider, error]) => `${provider}: ${error.message}`),
+				errors: [...result.errors].map(([id, error]) => `${id}: ${error.message}`),
+				providers: providerViews(),
+				models: modelOptions(currentSession),
 			});
 		} catch (error) {
 			sendJson(response, 503, { error: error instanceof Error ? error.message : String(error) });
@@ -1179,6 +1267,7 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 		try {
 			applySettingsPatch(currentSession.settingsManager, body);
 			await currentSession.settingsManager.flush();
+			if ("modelContextWindows" in body) currentSession.refreshModelOverrides();
 			runtime().sequence += 1;
 			broadcastSnapshot();
 			sendJson(response, 200, settingsView(currentSession.settingsManager));

@@ -428,6 +428,9 @@ export class AgentSession {
 		this._excludedToolNames = config.excludedToolNames ? new Set(config.excludedToolNames) : undefined;
 		this._baseToolsOverride = config.baseToolsOverride;
 		this._sessionStartEvent = config.sessionStartEvent ?? { type: "session_start", reason: "startup" };
+		if (this.agent.state.model) {
+			this.agent.state.model = this._applyModelContextOverride(this.agent.state.model);
+		}
 
 		// Always subscribe to agent events for internal handling
 		// (session persistence, extensions, auto-compaction, retry logic)
@@ -2110,6 +2113,24 @@ export class AgentSession {
 	}
 
 	/**
+	 * Overlay the settings-managed context window on a runtime model. Returns the model
+	 * unchanged when no override applies, so catalog objects keep their identity.
+	 */
+	private _applyModelContextOverride(model: Model<any>): Model<any> {
+		const contextWindow = this.settingsManager.getModelContextWindow(model.provider, model.id);
+		if (contextWindow === undefined || contextWindow === model.contextWindow) return model;
+		return { ...model, contextWindow };
+	}
+
+	/** Re-resolve the current model from the runtime and re-apply settings-derived overrides. */
+	refreshModelOverrides(): void {
+		const current = this.model;
+		if (!current) return;
+		const catalogModel = this._modelRuntime.getModel(current.provider, current.id) ?? current;
+		this.agent.state.model = this._applyModelContextOverride(catalogModel);
+	}
+
+	/**
 	 * Set model directly.
 	 * Validates that auth is configured and saves to the session transcript.
 	 * Persists to global defaults only when options.persist is true.
@@ -2121,12 +2142,13 @@ export class AgentSession {
 		}
 
 		const previousModel = this.model;
-		const thinkingLevel = this._getThinkingLevelForModelSwitch(model);
-		this.agent.state.model = model;
-		this.sessionManager.appendModelChange(model.provider, model.id);
+		const effectiveModel = this._applyModelContextOverride(model);
+		const thinkingLevel = this._getThinkingLevelForModelSwitch(effectiveModel);
+		this.agent.state.model = effectiveModel;
+		this.sessionManager.appendModelChange(effectiveModel.provider, effectiveModel.id);
 		if (options.persist) {
-			this.settingsManager.setDefaultModelAndProvider(model.provider, model.id);
-			this._addPersistedDefaultToNonEmptyScope(model);
+			this.settingsManager.setDefaultModelAndProvider(effectiveModel.provider, effectiveModel.id);
+			this._addPersistedDefaultToNonEmptyScope(effectiveModel);
 		}
 
 		// Apply thinking level for the new model.
@@ -2134,7 +2156,7 @@ export class AgentSession {
 		// Model persistence does not implicitly rewrite the global thinking default.
 		this.setThinkingLevel(thinkingLevel);
 
-		await this._emitModelSelect(model, previousModel, "set");
+		await this._emitModelSelect(effectiveModel, previousModel, "set");
 	}
 
 	private _addPersistedDefaultToNonEmptyScope(model: Model<any>): void {
@@ -2186,14 +2208,15 @@ export class AgentSession {
 		const len = scopedModels.length;
 		const nextIndex = direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
 		const next = scopedModels[nextIndex];
-		const thinkingLevel = this._getThinkingLevelForModelSwitch(next.model, next.thinkingLevel);
+		const nextModel = this._applyModelContextOverride(next.model);
+		const thinkingLevel = this._getThinkingLevelForModelSwitch(nextModel, next.thinkingLevel);
 
 		// Apply model
-		this.agent.state.model = next.model;
-		this.sessionManager.appendModelChange(next.model.provider, next.model.id);
+		this.agent.state.model = nextModel;
+		this.sessionManager.appendModelChange(nextModel.provider, nextModel.id);
 		if (options.persist) {
-			this.settingsManager.setDefaultModelAndProvider(next.model.provider, next.model.id);
-			this._addPersistedDefaultToNonEmptyScope(next.model);
+			this.settingsManager.setDefaultModelAndProvider(nextModel.provider, nextModel.id);
+			this._addPersistedDefaultToNonEmptyScope(nextModel);
 		}
 
 		// Apply thinking level for the new model.
@@ -2203,9 +2226,9 @@ export class AgentSession {
 		// Model persistence does not implicitly rewrite the global thinking default.
 		this.setThinkingLevel(thinkingLevel);
 
-		await this._emitModelSelect(next.model, currentModel, "cycle");
+		await this._emitModelSelect(nextModel, currentModel, "cycle");
 
-		return { model: next.model, thinkingLevel: this.thinkingLevel, isScoped: true };
+		return { model: nextModel, thinkingLevel: this.thinkingLevel, isScoped: true };
 	}
 
 	private async _cycleAvailableModel(
@@ -2221,7 +2244,7 @@ export class AgentSession {
 		if (currentIndex === -1) currentIndex = 0;
 		const len = availableModels.length;
 		const nextIndex = direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
-		const nextModel = availableModels[nextIndex];
+		const nextModel = this._applyModelContextOverride(availableModels[nextIndex]);
 
 		const thinkingLevel = this._getThinkingLevelForModelSwitch(nextModel);
 		this.agent.state.model = nextModel;
@@ -3014,7 +3037,7 @@ export class AgentSession {
 			return;
 		}
 
-		this.agent.state.model = refreshedModel;
+		this.agent.state.model = this._applyModelContextOverride(refreshedModel);
 	}
 
 	private _bindExtensionCore(runner: ExtensionRunner): void {

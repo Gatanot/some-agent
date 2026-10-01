@@ -21,6 +21,7 @@ import {
 } from "@earendil-works/pi-ai";
 import { getApiProvider } from "@earendil-works/pi-ai/compat";
 import type { ModelConfig, ModelsJsonModel, ModelsJsonModelOverride, ModelsJsonProvider } from "./model-config.ts";
+import { createModelDiscovery } from "./model-discovery.ts";
 import {
 	clearConfigValueCache,
 	getConfigValueEnvVarNames,
@@ -465,14 +466,26 @@ export function composeModelProvider(
 	const config = modelConfig.getProvider(providerId);
 	let extensionOAuthCredential: OAuthCredentials | undefined;
 	let refreshedExtensionModels: ProviderConfigInput["models"];
+	let discoveredModels: readonly Model<Api>[] = [];
 	const currentExtension = (): ProviderConfigInput | undefined =>
 		extension && refreshedExtensionModels ? { ...extension, models: refreshedExtensionModels } : extension;
+	// models.json-only providers expose their remote catalog, when the API is discoverable.
+	const discovery =
+		!base && !extension
+			? createModelDiscovery({
+					providerId,
+					config,
+					setModels: (models) => {
+						discoveredModels = models;
+					},
+				})
+			: undefined;
 	// models.json modelOverrides are the topmost user-config layer: they apply once,
 	// after custom-model upserts, extension model replacement, and legacy OAuth projection.
 	const getModels = () => {
 		let models = applyExtension(
 			providerId,
-			applyModelsJson(providerId, base?.getModels() ?? [], config),
+			applyModelsJson(providerId, base ? base.getModels() : discoveredModels, config),
 			currentExtension(),
 		);
 		if (extensionOAuthCredential && extension?.oauth?.modifyModels) {
@@ -520,7 +533,7 @@ export function composeModelProvider(
 		auth: { ...(apiKey ? { apiKey } : {}), ...(oauth ? { oauth } : {}) },
 		getModels,
 		refreshModels:
-			base?.refreshModels || extension?.refreshModels || extension?.oauth?.modifyModels
+			base?.refreshModels || extension?.refreshModels || extension?.oauth?.modifyModels || discovery
 				? async (context) => {
 						await base?.refreshModels?.(context);
 						let refreshed: NonNullable<ProviderConfigInput["models"]> | undefined;
@@ -540,6 +553,7 @@ export function composeModelProvider(
 								extensionOAuthCredential = oauthCredential;
 							},
 						});
+						await discovery?.(context);
 					}
 				: undefined,
 		filterModels: base?.filterModels

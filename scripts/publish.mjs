@@ -107,12 +107,15 @@ if (dryRun) {
 
 console.log("All packages validated; starting publication.\n");
 
+// Provenance requires a supported CI OIDC provider; local token publishes must omit it.
+const provenanceArgs = process.env.GITHUB_ACTIONS === "true" ? ["--provenance"] : [];
+
 for (const pkg of packageStates) {
 	if (pkg.published) {
 		console.log(`Skipping ${pkg.name}@${pkg.version}: already published\n`);
 		continue;
 	}
 
-	run("npm", ["publish", "--access", "public", "--provenance", "--ignore-scripts"], { cwd: pkg.directory });
+	run("npm", ["publish", "--access", "public", ...provenanceArgs, "--ignore-scripts"], { cwd: pkg.directory });
 	console.log();
 }

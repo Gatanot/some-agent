@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.7] - 2026-10-01
+
+### Fixed
+
+- Completed the `@gatanot/orrery-*` package release. npm staged five of the 0.2.6 packages, so this version republishes those packages and keeps the set at one lockstep version.
 
 ## [0.2.6] - 2026-10-01
 

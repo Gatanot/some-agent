@@ -14,6 +14,7 @@ import { CONFIG_DIR_NAME, getAgentDir, isBunBinary, isBundledNode } from "../../
 import { getBundledExtensionsDir } from "./bundled-dir.ts";
 
 export { getBundledExtensionsDir, setBundledExtensionsDirOverride } from "./bundled-dir.ts";
+
 import { resolvePath } from "../../utils/paths.ts";
 import { createEventBus, type EventBus } from "../event-bus.ts";
 import type { ExecOptions } from "../exec.ts";
@@ -99,6 +100,7 @@ function getAliases(): Record<string, string> {
 
 	_aliases = {
 		"@earendil-works/pi-coding-agent": piCodingAgentEntry,
+		"@gatanot/orrery": piCodingAgentEntry,
 		"@earendil-works/pi-agent-core": piAgentCoreEntry,
 		"@earendil-works/pi-tui": piTuiEntry,
 		"@earendil-works/pi-ai/providers/all": piAiProvidersEntry,

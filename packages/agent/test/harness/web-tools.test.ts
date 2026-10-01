@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { BACKGROUND_CONTEXT } from "../../src/harness/context.ts";
 import { WebToolError } from "../../src/harness/tools/web-common.ts";
 import { createWebFetchTool } from "../../src/harness/tools/web-fetch.ts";
 import { InMemoryWebToolCallHistory } from "../../src/harness/tools/web-history.ts";
@@ -9,6 +10,14 @@ import {
 	type WebSearchRequest,
 } from "../../src/harness/tools/web-search.ts";
 import { createWebTools } from "../../src/harness/tools/web-tools.ts";
+
+const invocation = {
+	invocationId: "web-test",
+	operationId: "web-test",
+	turnId: "web-test",
+	getMemo: async () => undefined,
+	setMemo: async () => {},
+};
 
 function textOutput(result: { content: Array<{ type: string; text?: string }> }): string {
 	return result.content.flatMap((part) => (part.type === "text" ? [part.text ?? ""] : [])).join("\n");
@@ -73,9 +82,10 @@ describe("web_search", () => {
 		const result = await tool.execute(
 			"search-1",
 			{ query: "  compact web tools  ", includeDomains: ["Example.COM", "example.com"] },
+			() => {},
 			undefined,
-			undefined,
-			undefined,
+			invocation,
+			BACKGROUND_CONTEXT,
 		);
 
 		expect(tool.description.length).toBeLessThan(100);
@@ -128,8 +138,22 @@ describe("web_search", () => {
 			fetch: { fetch: async () => new Response("plain text", { headers: { "content-type": "text/plain" } }) },
 		});
 
-		await web.webSearch.execute("search-shared", { query: "test" }, undefined, undefined, undefined);
-		await web.webFetch.execute("fetch-shared", { url: "https://example.com/" }, undefined, undefined, undefined);
+		await web.webSearch.execute(
+			"search-shared",
+			{ query: "test" },
+			() => {},
+			undefined,
+			invocation,
+			BACKGROUND_CONTEXT,
+		);
+		await web.webFetch.execute(
+			"fetch-shared",
+			{ url: "https://example.com/" },
+			() => {},
+			undefined,
+			invocation,
+			BACKGROUND_CONTEXT,
+		);
 
 		expect(web.tools.map((tool) => tool.name)).toEqual(["web_search", "web_fetch"]);
 		expect(web.history).toBeInstanceOf(InMemoryWebToolCallHistory);
@@ -198,9 +222,10 @@ describe("web_fetch", () => {
 		const result = await tool.execute(
 			"fetch-1",
 			{ url: "https://example.com/articles/one" },
+			() => {},
 			undefined,
-			undefined,
-			undefined,
+			invocation,
+			BACKGROUND_CONTEXT,
 		);
 		const output = textOutput(result);
 
@@ -232,9 +257,10 @@ describe("web_fetch", () => {
 		const result = await tool.execute(
 			"fetch-raw",
 			{ url: "https://example.com/articles/one", clean: false },
+			() => {},
 			undefined,
-			undefined,
-			undefined,
+			invocation,
+			BACKGROUND_CONTEXT,
 		);
 		const output = textOutput(result);
 
@@ -257,7 +283,14 @@ describe("web_fetch", () => {
 
 		let error: unknown;
 		try {
-			await tool.execute("fetch-private", { url: "https://example.com/redirect" }, undefined, undefined, undefined);
+			await tool.execute(
+				"fetch-private",
+				{ url: "https://example.com/redirect" },
+				() => {},
+				undefined,
+				invocation,
+				BACKGROUND_CONTEXT,
+			);
 		} catch (cause) {
 			error = cause;
 		}
@@ -277,7 +310,14 @@ describe("web_fetch", () => {
 		});
 
 		await expect(
-			tool.execute("fetch-timeout", { url: "https://example.com/slow" }, undefined, undefined, undefined),
+			tool.execute(
+				"fetch-timeout",
+				{ url: "https://example.com/slow" },
+				() => {},
+				undefined,
+				invocation,
+				BACKGROUND_CONTEXT,
+			),
 		).rejects.toMatchObject({ code: "timeout" });
 	});
 
@@ -291,7 +331,14 @@ describe("web_fetch", () => {
 		});
 
 		await expect(
-			tool.execute("fetch-large", { url: "https://example.com/large" }, undefined, undefined, undefined),
+			tool.execute(
+				"fetch-large",
+				{ url: "https://example.com/large" },
+				() => {},
+				undefined,
+				invocation,
+				BACKGROUND_CONTEXT,
+			),
 		).rejects.toMatchObject({ code: "response_too_large" });
 	});
 });

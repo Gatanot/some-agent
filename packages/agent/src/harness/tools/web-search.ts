@@ -104,7 +104,7 @@ export function createWebSearchTool(
 		label: "web_search",
 		description: "Search the web. Returns untrusted titles, URLs, snippets, and publication times.",
 		parameters: webSearchSchema,
-		async execute(toolCallId, params, signal) {
+		async execute(toolCallId, params, _onUpdate, _toolContext, _invocation, context) {
 			const maxResults = params.maxResults ?? DEFAULT_MAX_RESULTS;
 			if (!Number.isInteger(maxResults) || maxResults < 1 || maxResults > MAX_RESULTS) {
 				throw new WebToolError("invalid_arguments", `maxResults must be an integer from 1 to ${MAX_RESULTS}`);
@@ -138,7 +138,7 @@ export function createWebSearchTool(
 
 			const results: WebSearchResult[] = [];
 			const seen = new Set<string>();
-			for (const rawResult of await options.provider.search(request, signal)) {
+			for (const rawResult of await options.provider.search(request, context.abortSignal)) {
 				const result = normalizeResult(rawResult);
 				if (!result || seen.has(result.url)) continue;
 				seen.add(result.url);

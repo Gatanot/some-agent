@@ -395,7 +395,7 @@ export function createWebFetchTool(
 		label: "web_fetch",
 		description: "Fetch an untrusted web page. Returns compact Markdown; clean=false returns sanitized HTML.",
 		parameters: webFetchSchema,
-		async execute(toolCallId, params, signal) {
+		async execute(toolCallId, params, _onUpdate, _toolContext, _invocation, context) {
 			const resolved = { url: params.url, clean: params.clean ?? true };
 			await recordWebToolCall(
 				options.history,
@@ -410,7 +410,7 @@ export function createWebFetchTool(
 				options.onHistoryError,
 			);
 			const initialUrl = normalizeHttpUrl(resolved.url);
-			const requestSignal = createRequestSignal(signal, timeoutMs);
+			const requestSignal = createRequestSignal(context.abortSignal, timeoutMs);
 			try {
 				const { response, finalUrl } = await fetchWithRedirects(requestFetch, initialUrl, {
 					allowPrivateAddresses,

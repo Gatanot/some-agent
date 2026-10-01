@@ -1,5 +1,5 @@
 {
-	"name": "@earendil-works/pi-coding-agent",
+	"name": "@gatanot/orrery",
 	"version": "0.87.1",
 	"description": "Coding agent CLI with read, bash, edit, write tools and session management",
 	"type": "module",
@@ -8,7 +8,6 @@
 		"configDir": ".pi"
 	},
 	"bin": {
-		"pi": "dist/bundle/cli.js",
 		"orrery": "dist/bundle/cli.js"
 	},
 	"main": "./dist/index.js",

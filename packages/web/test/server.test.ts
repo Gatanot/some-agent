@@ -708,7 +708,7 @@ test("aborts an active prompt and publishes the stopped state", async () => {
 	}
 });
 
-test("queues a prompt while the agent is streaming instead of rejecting it", async () => {
+test("steers a prompt while the agent is streaming instead of rejecting it", async () => {
 	let announceStarted: (() => void) | undefined;
 	let releaseFirst: ((message: ReturnType<typeof fauxAssistantMessage>) => void) | undefined;
 	const firstStarted = new Promise<void>((resolve) => {
@@ -744,13 +744,13 @@ test("queues a prompt while the agent is streaming instead of rejecting it", asy
 
 		const during = await request(fixture.baseUrl, "/api/state");
 		const duringSnapshot = during.body as unknown as WebSnapshot;
-		assert.deepEqual(duringSnapshot.queuedMessages?.followUp, ["second"]);
-		assert.deepEqual(duringSnapshot.queuedMessages?.steering, []);
+		assert.deepEqual(duringSnapshot.queuedMessages?.steering, ["second"]);
+		assert.deepEqual(duringSnapshot.queuedMessages?.followUp, []);
 
 		releaseFirst?.(fauxAssistantMessage("first reply"));
 		assert.equal((await firstPrompt).status, 200);
 
-		// The follow-up runs as its own turn after the first one settles.
+		// The steering prompt runs after the current model response settles.
 		const deadline = Date.now() + 3_000;
 		let afterSnapshot: WebSnapshot | undefined;
 		while (Date.now() < deadline) {
@@ -760,7 +760,7 @@ test("queues a prompt while the agent is streaming instead of rejecting it", asy
 			await new Promise((resolve) => setTimeout(resolve, 20));
 		}
 		assert.ok(afterSnapshot);
-		assert.deepEqual(afterSnapshot.queuedMessages?.followUp, []);
+		assert.deepEqual(afterSnapshot.queuedMessages?.steering, []);
 		assert.match(JSON.stringify(afterSnapshot.messages), /queued reply/);
 	} finally {
 		await events.reader.cancel();

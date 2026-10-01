@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Fixed `orrery web` failing on npm installs with `SyntaxError: The requested module '@earendil-works/pi-tui' does not provide an export named 'BorderedBox'`. The web server now loads the tui-free `@gatanot/orrery/web-api` entry instead of the package root.
+
 ## [0.2.4] - 2026-10-01
 
 ### Added

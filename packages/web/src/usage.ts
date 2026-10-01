@@ -1,4 +1,4 @@
-import type { SessionEntry } from "@gatanot/orrery";
+import type { SessionEntry } from "@gatanot/orrery/web-api";
 
 export interface UsageModelTotals {
 	key: string;

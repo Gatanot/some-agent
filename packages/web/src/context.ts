@@ -1,4 +1,4 @@
-import { estimateTokens } from "@gatanot/orrery";
+import { estimateTokens } from "@gatanot/orrery/web-api";
 
 type ContextMessage = Parameters<typeof estimateTokens>[0];
 

@@ -7,8 +7,14 @@ import type { AddressInfo } from "node:net";
 import { homedir } from "node:os";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { AgentSession, AgentSessionEvent, SessionEntry, SessionInfo, SettingsManager } from "@gatanot/orrery";
-import { createAgentSession, SessionManager } from "@gatanot/orrery";
+import type {
+	AgentSession,
+	AgentSessionEvent,
+	SessionEntry,
+	SessionInfo,
+	SettingsManager,
+} from "@gatanot/orrery/web-api";
+import { createAgentSession, SessionManager } from "@gatanot/orrery/web-api";
 import type { ViteDevServer } from "vite";
 import { contextBreakdown } from "./context.ts";
 import { parseFileLimit, searchProjectFiles } from "./files.ts";

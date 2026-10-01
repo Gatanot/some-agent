@@ -17,8 +17,12 @@
 			"types": "./dist/index.d.ts",
 			"import": "./dist/index.js"
 		},
-		"./rpc-entry": {
+			"./rpc-entry": {
 			"import": "./dist/bundle/rpc-entry.js"
+		},
+		"./web-api": {
+			"types": "./dist/web-api.d.ts",
+			"import": "./dist/web-api.js"
 		},
 		"./client": {
 			"source": "./src/client/index.ts"

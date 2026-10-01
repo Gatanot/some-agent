@@ -22,7 +22,9 @@ await build({
 	format: "esm",
 	outfile: join(outputDir, "server.js"),
 	target: "node22.19",
-	external: ["@gatanot/orrery"],
+	// Runtime resolution of the installed package keeps the server free of the
+	// interactive TUI entry points; `@gatanot/orrery/web-api` is tui-free.
+	external: ["@gatanot/orrery/web-api"],
 	banner: { js: 'import { createRequire as __createRequire } from "node:module"; const require = __createRequire(import.meta.url);' },
 });
 

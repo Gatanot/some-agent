@@ -1,5 +1,11 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- Fixed Anthropic-compatible proxies that deliver the complete tool input in `content_block_start` and send no `input_json_delta` events losing tool-call arguments, which made tools run with empty input.
+
 ## [0.87.1] - 2026-09-22
 
 ### Added

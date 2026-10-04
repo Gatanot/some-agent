@@ -737,7 +737,12 @@ export const stream: StreamFunction<"anthropic-messages", AnthropicOptions> = (
 								partial: output,
 							});
 						} else if (block.type === "toolCall") {
-							block.arguments = parseStreamingJson(block.partialJson);
+							// Some Anthropic-compatible proxies stream the complete tool input in
+							// content_block_start and never send input_json_delta. Only overwrite the
+							// start input when deltas actually arrived.
+							if (block.partialJson.trim() !== "") {
+								block.arguments = parseStreamingJson(block.partialJson);
+							}
 							// Finalize in-place and strip the scratch buffer so replay only
 							// carries parsed arguments.
 							delete (block as { partialJson?: string }).partialJson;

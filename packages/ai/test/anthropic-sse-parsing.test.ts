@@ -413,6 +413,65 @@ describe("Anthropic raw SSE parsing", () => {
 		});
 	});
 
+	it("keeps tool input delivered on content_block_start without input_json_delta", async () => {
+		const model = getModel("anthropic", "claude-haiku-4-5");
+		const context = normalizeContext({
+			messages: [{ role: "user", content: "List the files.", timestamp: Date.now() }],
+			tools: [
+				{
+					name: "Bash",
+					description: "Run a bash command.",
+					parameters: Type.Object({ command: Type.String() }),
+				},
+			],
+		});
+		const response = createSseResponse([
+			{
+				event: "message_start",
+				data: JSON.stringify({
+					type: "message_start",
+					message: {
+						id: "msg_tool_start_input",
+						usage: { input_tokens: 12, output_tokens: 0 },
+					},
+				}),
+			},
+			{
+				event: "content_block_start",
+				data: JSON.stringify({
+					type: "content_block_start",
+					index: 0,
+					content_block: {
+						type: "tool_use",
+						id: "toolu_test",
+						name: "Bash",
+						input: { command: "ls -la" },
+					},
+				}),
+			},
+			{ event: "content_block_stop", data: JSON.stringify({ type: "content_block_stop", index: 0 }) },
+			{
+				event: "message_delta",
+				data: JSON.stringify({
+					type: "message_delta",
+					delta: { stop_reason: "tool_use" },
+					usage: { input_tokens: 12, output_tokens: 5 },
+				}),
+			},
+			{ event: "message_stop", data: JSON.stringify({ type: "message_stop" }) },
+		]);
+
+		// Regression for relays that put the full input in content_block_start and
+		// stream no input_json_delta events (seen with CatsCo/Bifrost).
+		const result = await streamAnthropic(model, context, {
+			client: createFakeAnthropicClient(response),
+		}).result();
+
+		expect(result.stopReason).toBe("toolUse");
+		const toolCall = result.content.find((block): block is ToolCall => block.type === "toolCall");
+		expect(toolCall?.arguments).toEqual({ command: "ls -la" });
+	});
+
 	it("preserves content from content_block_start events", async () => {
 		const model = getModel("anthropic", "claude-haiku-4-5");
 		const context = normalizeContext({

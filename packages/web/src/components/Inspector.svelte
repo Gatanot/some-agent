@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { ChartColumn, FileDiff, GitBranch, Moon, RotateCw, Sun } from "@lucide/svelte";
+	import { ChartColumn, FileDiff, GitBranch, RotateCw } from "@lucide/svelte";
 	import { parseDiffLines } from "../diff.ts";
 	import type { WebContextPartKey, WebGitDiff, WebGitFile, WebSnapshot, WebUsage } from "../protocol.ts";
 	import type { AppState, DiffLine } from "../types.ts";
@@ -14,9 +14,6 @@
 	export let onTabSelect: (tab: InspectorTab) => void;
 	export let onRefreshGit: () => void;
 	export let onGitDiff: (path: string) => Promise<WebGitDiff>;
-	export let theme: "light" | "dark";
-	export let themeActionLabel: string;
-	export let onToggleTheme: () => void;
 	/** Incremented by the host when a turn settles, so the usage tab can refetch. */
 	export let usageRefresh = 0;
 
@@ -195,7 +192,6 @@
 			</button>
 		</div>
 		<div class="inspector-tab-actions">
-			<button class="icon-button theme-toggle" type="button" aria-label={themeActionLabel} title={themeActionLabel} on:click={onToggleTheme}>{#if theme === "light"}<Moon size={15} />{:else}<Sun size={15} />{/if}</button>
 			{#if activeTab === "changes"}<button class="icon-button" type="button" aria-label="Refresh Git status" title="Refresh Git status" disabled={git.state === "loading" || state.phase === "running"} on:click={onRefreshGit}><RotateCw size={15} /></button>{:else if activeTab === "usage"}<button class="icon-button" type="button" aria-label="Refresh usage" title="Refresh usage" disabled={usageLoading} on:click={loadUsage}><RotateCw size={15} /></button>{/if}
 		</div>
 	</div>

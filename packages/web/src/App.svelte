@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
-	import { Pencil, Settings as SettingsIcon, X } from "@lucide/svelte";
+	import { Moon, Pencil, Settings as SettingsIcon, Sun, X } from "@lucide/svelte";
 	import Composer from "./components/Composer.svelte";
 	import Inspector from "./components/Inspector.svelte";
 	import SessionSidebar from "./components/SessionSidebar.svelte";
@@ -505,7 +505,7 @@
 					<div class="session-title-line"><h1 class="current-title" title={state.title}>{state.title}</h1>{#if serverSnapshot?.ready}<button class="icon-button rename-button" type="button" aria-label="Rename session" title="Rename session" disabled={sessionNameEditing} on:click={renameSession}><Pencil size={14} /></button>{/if}</div>
 					<div class="session-facts"><span class={`run-status ${state.phaseTone}`} aria-live="polite" title={state.sessionId || undefined}><span class="status-dot" aria-hidden="true"></span>{state.phaseLabel}</span><span>{state.messages.length} messages</span></div>
 				</div>
-				<div class="toolbar-actions"><button class="icon-button settings-trigger" type="button" aria-label="打开设置" title="打开设置" aria-expanded={settingsOpen} on:click={() => (settingsOpen = true)}><SettingsIcon size={17} /></button></div>
+				<div class="toolbar-actions"><button class="icon-button" type="button" aria-label={themeActionLabel} title={themeActionLabel} on:click={toggleTheme}>{#if theme === "light"}<Moon size={15} />{:else}<Sun size={15} />{/if}</button><button class="icon-button settings-trigger" type="button" aria-label="打开设置" title="打开设置" aria-expanded={settingsOpen} on:click={() => (settingsOpen = true)}><SettingsIcon size={17} /></button></div>
 			</header>
 			{#if uiError}<div class="ui-error" role="alert"><span>{uiError}</span><button class="icon-button" type="button" aria-label="关闭提示" on:click={() => (uiError = "")}><X size={15} /></button></div>{/if}
 			<Timeline state={state} onNoticeAction={noticeAction} onCopy={copyText} onReconnect={connectEvents}>
@@ -522,7 +522,7 @@
 				/>
 			</Timeline>
 		</section>
-		<Inspector state={state} snapshot={serverSnapshot} activeTab={inspectorTab} {theme} {themeActionLabel} onToggleTheme={toggleTheme} onTabSelect={selectInspectorTab} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} usageRefresh={usageRefreshToken} />
+		<Inspector state={state} snapshot={serverSnapshot} activeTab={inspectorTab} onTabSelect={selectInspectorTab} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} usageRefresh={usageRefreshToken} />
 		<Settings open={settingsOpen} onClose={() => (settingsOpen = false)} />
 		{#if pendingDelete}
 			<button class="confirm-backdrop" type="button" aria-label="Cancel session deletion" on:click={() => (pendingDelete = undefined)}></button>

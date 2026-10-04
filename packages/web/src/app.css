@@ -107,7 +107,7 @@ button:disabled { cursor: default; opacity: .48; }
 .primary-button:hover:not(:disabled) { background: var(--accent-strong); transform: translateY(-1px); }
 .secondary-button:active:not(:disabled), .primary-button:active:not(:disabled), .icon-button:active:not(:disabled) { transform: translateY(0); }
 
-.workspace { position: relative; display: grid; grid-template-columns: 260px minmax(0, 1fr) minmax(290px, 22vw); min-height: 0; overflow: hidden; background: var(--surface); }
+.workspace { position: relative; display: grid; grid-template-columns: 260px minmax(0, 1fr) minmax(260px, 300px); min-height: 0; overflow: hidden; background: var(--surface); }
 .workspace-select { display: flex; width: 100%; min-width: 0; align-items: center; gap: 7px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-raised); color: var(--text); text-align: left; font-weight: 650; }
 .workspace-select:hover { border-color: var(--line-strong); background: var(--surface-soft); }
 .workspace-select svg { flex: 0 0 auto; color: var(--text-subtle); }

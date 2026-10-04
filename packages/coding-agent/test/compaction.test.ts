@@ -10,6 +10,7 @@ import {
 	compact,
 	DEFAULT_COMPACTION_SETTINGS,
 	estimateContextTokens,
+	estimateTokens,
 	findCutPoint,
 	getLastAssistantUsage,
 	prepareCompaction,
@@ -250,6 +251,27 @@ describe("getLastAssistantUsage", () => {
 	it("should return undefined if no assistant messages", () => {
 		const entries: SessionEntry[] = [createMessageEntry(createUserMessage("Hello"))];
 		expect(getLastAssistantUsage(entries)).toBeUndefined();
+	});
+});
+
+describe("estimateTokens", () => {
+	it("counts CJK characters denser than Latin text", () => {
+		expect(estimateTokens(createUserMessage("a".repeat(400)))).toBe(100);
+		expect(estimateTokens(createUserMessage("中".repeat(400)))).toBe(400);
+		expect(estimateTokens(createUserMessage(`${"a".repeat(200)}${"中".repeat(50)}${"b".repeat(200)}`))).toBe(150);
+	});
+
+	it("counts CJK text blocks in tool results", () => {
+		const message: AgentMessage = {
+			role: "toolResult",
+			toolCallId: "call",
+			toolName: "read",
+			content: [{ type: "text", text: "中".repeat(100) }],
+			isError: false,
+			timestamp: Date.now(),
+		};
+
+		expect(estimateTokens(message)).toBe(100);
 	});
 });
 

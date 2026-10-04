@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The web inspector now derives assistant and user/tool token counts from provider usage and prompt deltas, so the `Config` segment stops absorbing per-message estimation error and stays at its real size.
+- `estimateTokens` now counts CJK and full-width code points at one token per character instead of four characters per token, fixing underestimated context size and late compaction for Chinese sessions.
+
 ## [0.2.7] - 2026-10-01
 
 ### Fixed

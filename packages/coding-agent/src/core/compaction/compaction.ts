@@ -297,15 +297,40 @@ export function shouldCompact(contextTokens: number, contextWindow: number, sett
 
 const ESTIMATED_IMAGE_CHARS = 4800;
 
+/**
+ * CJK and full-width text tokenizes at roughly one token per character, unlike Latin text at
+ * roughly four characters per token. Counting those code points as four chars keeps the chars/4
+ * conversion correct for both.
+ */
+function textWeight(text: string): number {
+	let weight = 0;
+	for (let index = 0; index < text.length; index++) {
+		weight += isCjkCodeUnit(text.charCodeAt(index)) ? 4 : 1;
+	}
+	return weight;
+}
+
+function isCjkCodeUnit(code: number): boolean {
+	return (
+		(code >= 0x3000 && code <= 0x303f) || // CJK punctuation
+		(code >= 0x3040 && code <= 0x30ff) || // Hiragana and katakana
+		(code >= 0x3400 && code <= 0x4dbf) || // Unified ideographs extension A
+		(code >= 0x4e00 && code <= 0x9fff) || // Unified ideographs
+		(code >= 0xac00 && code <= 0xd7af) || // Hangul syllables
+		(code >= 0xf900 && code <= 0xfaff) || // Compatibility ideographs
+		(code >= 0xff00 && code <= 0xffef) // Full-width forms
+	);
+}
+
 function estimateTextAndImageContentChars(content: string | Array<{ type: string; text?: string }>): number {
 	if (typeof content === "string") {
-		return content.length;
+		return textWeight(content);
 	}
 
 	let chars = 0;
 	for (const block of content) {
 		if (block.type === "text" && block.text) {
-			chars += block.text.length;
+			chars += textWeight(block.text);
 		} else if (block.type === "image") {
 			chars += ESTIMATED_IMAGE_CHARS;
 		}
@@ -314,7 +339,8 @@ function estimateTextAndImageContentChars(content: string | Array<{ type: string
 }
 
 /**
- * Estimate token count for a message using chars/4 heuristic.
+ * Estimate token count for a message using a chars/4 heuristic, counting CJK code points as four
+ * chars because they tokenize near one token per character.
  * This is conservative (overestimates tokens).
  */
 export function estimateTokens(message: AgentMessage): number {
@@ -326,10 +352,10 @@ export function estimateTokens(message: AgentMessage): number {
 			chars = estimateTextAndImageContentChars(system.content);
 			if (system.sections) {
 				for (const section of Object.values(system.sections)) {
-					if (section) chars += section.length;
+					if (section) chars += textWeight(section);
 				}
 			}
-			if (system.toolsAdded) chars += JSON.stringify(system.toolsAdded).length;
+			if (system.toolsAdded) chars += textWeight(JSON.stringify(system.toolsAdded));
 			return Math.ceil(chars / 4);
 		}
 		case "user": {
@@ -342,11 +368,11 @@ export function estimateTokens(message: AgentMessage): number {
 			const assistant = message as AssistantMessage;
 			for (const block of assistant.content) {
 				if (block.type === "text") {
-					chars += block.text.length;
+					chars += textWeight(block.text);
 				} else if (block.type === "thinking") {
-					chars += block.thinking.length;
+					chars += textWeight(block.thinking);
 				} else if (block.type === "toolCall") {
-					chars += block.name.length + JSON.stringify(block.arguments).length;
+					chars += block.name.length + textWeight(JSON.stringify(block.arguments));
 				}
 			}
 			return Math.ceil(chars / 4);
@@ -357,12 +383,12 @@ export function estimateTokens(message: AgentMessage): number {
 			return Math.ceil(chars / 4);
 		}
 		case "bashExecution": {
-			chars = message.command.length + message.output.length;
+			chars = textWeight(message.command) + textWeight(message.output);
 			return Math.ceil(chars / 4);
 		}
 		case "branchSummary":
 		case "compactionSummary": {
-			chars = message.summary.length;
+			chars = textWeight(message.summary);
 			return Math.ceil(chars / 4);
 		}
 	}

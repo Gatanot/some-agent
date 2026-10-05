@@ -2,6 +2,22 @@
 	// Module-level so a tool card stays expanded across component recreation (for example when the
 	// streaming message becomes a committed message).
 	const openToolIds = new Set<string>();
+
+	const SUBAGENT_NAMES = [
+		"Rigel", "Altair", "Deneb", "Canopus", "Procyon", "Capella", "Pollux", "Mimosa",
+		"Hadar", "Albireo", "Fomalhaut", "Nunki", "Sheliak", "Spica", "Antares", "Regulus",
+		"Achernar", "Arcturus", "Mizar", "Alkaid", "Alnilam", "Bellatrix", "Izar", "Rasalhague",
+		"Kochab", "Thuban", "Etamin", "Schedar", "Nashira", "Algieba",
+		"Sirius", "Vega", "Polaris", "Betelgeuse", "Aldebaran", "Castor", "Acrux", "Gacrux",
+		"Shaula", "Alnitak", "Saiph", "Alcor", "Algol", "Denebola", "Dubhe", "Alioth",
+		"Alpheratz", "Mirfak", "Elnath", "Alphard", "Proxima",
+	];
+
+	function subagentName(id: string): string {
+		let h = 0;
+		for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) & 0xffff;
+		return SUBAGENT_NAMES[h % SUBAGENT_NAMES.length];
+	}
 </script>
 
 <script lang="ts">
@@ -20,7 +36,7 @@
 	export let onCopy: (value: string) => Promise<boolean>;
 
 	let now = Date.now();
-	let open = openToolIds.has(tool.id);
+	let open = openToolIds.has(tool.id) || (tool.name === "subagent" && tool.status === "running");
 
 	onMount(() => {
 		const timer = setInterval(() => {
@@ -96,10 +112,11 @@
 	<button class="tool-toggle" type="button" aria-expanded={open} aria-controls={detailId} on:click={toggle}>
 		<span class="tool-head">
 			<span class:error={tool.status === "error"} class="tool-name">{displayName()}</span>
+			{#if tool.name === "subagent"}<span class="tool-subagent-name">{subagentName(tool.id)}</span>{/if}
 			{#if headerMeta()}<span class="tool-meta">{headerMeta()}</span>{/if}
 			<ChevronDown size={13} class={`tool-caret${open ? " open" : ""}`} aria-hidden="true" />
 		</span>
-		{#if tool.target}<span class="tool-target">{tool.target}</span>{/if}
+		{#if tool.target}<span class={`tool-target${tool.name === "subagent" ? " tool-target-prompt" : ""}`}>{tool.target}</span>{/if}
 		{#if tool.images?.length}<span class="tool-image-count" title={`${tool.images.length} image${tool.images.length === 1 ? "" : "s"}`}><Images size={12} aria-hidden="true" />{tool.images.length}</span>{/if}
 	</button>
 	{#if open}

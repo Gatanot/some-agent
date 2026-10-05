@@ -1,11 +1,10 @@
 <script lang="ts">
-	import { ChevronDown, ChevronRight, RotateCcw, RotateCw, X } from "@lucide/svelte";
+	import { ChevronDown, ChevronRight, RotateCcw, RotateCw } from "@lucide/svelte";
+	import { onMount } from "svelte";
 	import type { WebProviderOption, WebSettings } from "../protocol.ts";
 	import type { ModelOption } from "../types.ts";
 	import { workspaceFetch } from "../workspace.ts";
-
-	export let open: boolean;
-	export let onClose: () => void;
+	import SidePanel from "./SidePanel.svelte";
 
 	const thinkingLevels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 
@@ -423,26 +422,13 @@
 		expandedModelLists,
 	);
 
-	let wasOpen = false;
-	$: if (open && !wasOpen) {
-		wasOpen = true;
+	onMount(() => {
 		void loadSettings();
-	}
-	$: if (!open && wasOpen) {
-		wasOpen = false;
-		settings = undefined;
-		error = "";
-	}
+	});
 </script>
 
-{#if open}
-	<button class="settings-backdrop" type="button" aria-label="关闭设置" on:click={onClose}></button>
-	<div class="settings-panel" role="dialog" aria-modal="true" aria-label="设置">
-		<header class="settings-head">
-			<h2>设置</h2>
-			<button class="icon-button" type="button" aria-label="关闭设置" title="关闭设置" on:click={onClose}><X size={17} /></button>
-		</header>
-		<div class="settings-body">
+<SidePanel title="设置" className="panel-settings">
+	<div class="settings-body">
 			{#if error}<div class="settings-error">{error}</div>{/if}
 			{#if loading && !settings}
 				<div class="settings-placeholder">正在加载设置…</div>
@@ -675,6 +661,5 @@
 					</label>
 				</section>
 			{/if}
-		</div>
 	</div>
-{/if}
+</SidePanel>

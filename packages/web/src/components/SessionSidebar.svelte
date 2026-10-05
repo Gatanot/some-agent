@@ -1,13 +1,9 @@
 <script lang="ts">
-	import { FolderOpen, Plus, Search, Trash2 } from "@lucide/svelte";
+	import { Plus, Search, Trash2 } from "@lucide/svelte";
 	import type { WebSessionMatch, WebSessionSummary, WebSnapshot } from "../protocol.ts";
-	import WorkspacePicker from "./WorkspacePicker.svelte";
+	import SidePanel from "./SidePanel.svelte";
 
 	export let snapshot: WebSnapshot | undefined;
-	export let cwd: string;
-	export let workspaces: string[];
-	export let onWorkspaceSelect: (path: string) => void;
-	let workspaceOpen = false;
 	export let sessions: WebSessionSummary[] = [];
 	export let matches: WebSessionMatch[] = [];
 	export let searching = false;
@@ -62,26 +58,35 @@
 	$: needle = query.trim();
 </script>
 
-<aside class="sidebar" aria-label="Session navigation">
-	<div class="sidebar-head">
+<SidePanel title="Sessions" ariaLabel="Session navigation" className="panel-sessions">
+	<button
+		slot="actions"
+		class="icon-button new-session-button"
+		type="button"
+		aria-label="New session"
+		title="New session"
+		disabled={newSessionDisabled}
+		on:click={onNewSession}
+	>
+		<Plus size={16} strokeWidth={1.9} />
+	</button>
+
+	<div class="session-search-row">
 		<div class="search-wrap">
 			<Search size={14} aria-hidden="true" />
 			<label class="visually-hidden" for="session-search">Search sessions</label>
 			<input id="session-search" class="session-search" type="search" bind:value={query} placeholder="Search" />
 		</div>
-		<button class="icon-button new-session-button" type="button" aria-label="New session" title="New session" disabled={newSessionDisabled} on:click={onNewSession}>
-			<Plus size={16} strokeWidth={1.9} />
-		</button>
 	</div>
 
 	<nav class="session-list" aria-label="Session history">
 		{#if !snapshot}
-			<div class="sidebar-placeholder">Connecting to the current session…</div>
+			<div class="panel-placeholder">Connecting to the current session…</div>
 		{:else if needle}
 			{#if searching && matches.length === 0}
-				<div class="sidebar-placeholder">Searching…</div>
+				<div class="panel-placeholder">Searching…</div>
 			{:else if matches.length === 0}
-				<div class="sidebar-placeholder">No matching sessions</div>
+				<div class="panel-placeholder">No matching sessions</div>
 			{:else}
 				<div class="session-period">Results · {matches.length}</div>
 				{#each matches as session (session.id)}
@@ -99,7 +104,7 @@
 				{/each}
 			{/if}
 		{:else if sessions.length === 0 && !currentId}
-			<div class="sidebar-placeholder">No sessions yet</div>
+			<div class="panel-placeholder">No sessions yet</div>
 		{:else}
 			<div class="session-period">Recent</div>
 			{#each sessions as session (session.id)}
@@ -122,20 +127,4 @@
 			{/if}
 		{/if}
 	</nav>
-
-	<div class="sidebar-foot">
-		<button class="workspace-select" type="button" title={cwd} aria-haspopup="dialog" on:click={() => (workspaceOpen = true)}>
-			<FolderOpen size={14} />
-			<span class="workspace-select-name">{cwd.split(/[\\/]/).filter(Boolean).at(-1) ?? "工作空间"}</span>
-		</button>
-	</div>
-
-	<WorkspacePicker
-		open={workspaceOpen}
-		{cwd}
-		{workspaces}
-		busy={snapshot?.prompting === true}
-		onSelect={(path) => { workspaceOpen = false; onWorkspaceSelect(path); }}
-		onClose={() => (workspaceOpen = false)}
-	/>
-</aside>
+</SidePanel>

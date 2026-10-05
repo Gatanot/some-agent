@@ -1,3 +1,6 @@
+/** Sections selectable from the activity bar; at most one panel is open at a time. */
+export type PanelId = "sessions" | "changes" | "usage" | "settings";
+
 export type ToolStatus = "done" | "running" | "error";
 export type NoticeKind = "empty" | "history" | "error" | "warning";
 export type PhaseTone = "idle" | "running" | "compacting" | "error" | "disconnected";

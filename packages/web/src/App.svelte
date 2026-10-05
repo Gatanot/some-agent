@@ -1,22 +1,23 @@
 <script lang="ts">
 	import { onDestroy, onMount } from "svelte";
-	import { Moon, Pencil, Settings as SettingsIcon, Sun, X } from "@lucide/svelte";
+	import { Pencil, X } from "@lucide/svelte";
+	import ActivityBar from "./components/ActivityBar.svelte";
+	import ChangesPanel from "./components/ChangesPanel.svelte";
 	import Composer from "./components/Composer.svelte";
-	import Inspector from "./components/Inspector.svelte";
 	import SessionSidebar from "./components/SessionSidebar.svelte";
 	import Settings from "./components/Settings.svelte";
 	import Timeline from "./components/Timeline.svelte";
+	import UsagePanel from "./components/UsagePanel.svelte";
+	import WorkspacePicker from "./components/WorkspacePicker.svelte";
 	import { lastUserPromptText, snapshotToAppState } from "./live.ts";
 	import type { WebEventEnvelope, WebGitDiff, WebSessionMatch, WebSessionSearchResponse, WebSessionSummary, WebSessionsResponse, WebSnapshot } from "./protocol.ts";
-	import type { AppState } from "./types.ts";
+	import type { AppState, PanelId } from "./types.ts";
 	import { clearWorkspaceId, getWorkspaceId, setWorkspaceId, workspaceEventUrl, workspaceFetch } from "./workspace.ts";
 
 	const themeStorageKey = "orrery.theme";
 	const themeColors = { light: "#f4f5f7", dark: "#17191c" } as const;
 	type ThemeName = keyof typeof themeColors;
 	let theme: ThemeName = currentTheme();
-	let themeActionLabel = "";
-	$: themeActionLabel = theme === "light" ? "Switch to dark theme" : "Switch to light theme";
 
 	function isThemeName(value: unknown): value is ThemeName {
 		return value === "light" || value === "dark";
@@ -61,9 +62,46 @@
 		applyTheme(theme);
 	}
 
+	const panelStorageKey = "orrery.panel";
+
+	function isPanelId(value: unknown): value is PanelId {
+		return value === "sessions" || value === "changes" || value === "usage" || value === "settings";
+	}
+
+	function readPanelPreference(): PanelId | null {
+		try {
+			const stored = localStorage.getItem(panelStorageKey);
+			if (stored === "none") return null;
+			return isPanelId(stored) ? stored : "sessions";
+		} catch {
+			return "sessions";
+		}
+	}
+
+	function setPanel(panel: PanelId | null): void {
+		activePanel = panel;
+		try {
+			localStorage.setItem(panelStorageKey, panel ?? "none");
+		} catch {
+			// Storage can be unavailable; the panel still toggles for this visit.
+		}
+	}
+
+	function togglePanel(panel: PanelId): void {
+		setPanel(activePanel === panel ? null : panel);
+	}
+
+	function closePanel(): void {
+		const closing = activePanel;
+		setPanel(null);
+		if (closing) queueMicrotask(() => document.querySelector<HTMLButtonElement>(`.activity-button[data-panel="${closing}"]`)?.focus());
+	}
+
 	let workspacePaths: string[] = [];
 	let uiError = "";
-	let settingsOpen = false;
+	let workspaceOpen = false;
+	// The panel open in this tab; restored on reload so the layout stays where the user left it.
+	let activePanel: PanelId | null = readPanelPreference();
 	let pendingDelete: { id: string; title: string } | undefined = undefined;
 	let serverSnapshot: WebSnapshot | undefined;
 	// Snapshots are applied to `latestSnapshot` immediately and rendered at most once per frame so
@@ -76,7 +114,6 @@
 	let sessionSearching = false;
 	let sessionSearchRequest = 0;
 	let sessionSearchTimer: ReturnType<typeof setTimeout> | undefined;
-	let inspectorTab: "changes" | "usage" = "usage";
 	let connectionStatus: "connecting" | "connected" | "disconnected" = "connecting";
 	let eventStream: EventSource | undefined;
 	let draftValue = "";
@@ -172,17 +209,14 @@
 		return payload.files ?? [];
 	}
 
-	function selectInspectorTab(tab: "changes" | "usage"): void {
-		inspectorTab = tab;
-	}
-
 	function handleEscape(event: KeyboardEvent): void {
 		if (event.key !== "Escape") return;
 		if (pendingDelete) {
 			pendingDelete = undefined;
 			return;
 		}
-		settingsOpen = false;
+		// The panel overlays the timeline on narrow layouts; there Escape closes it.
+		if (activePanel && window.matchMedia("(max-width: 820px)").matches) closePanel();
 	}
 
 	function flushSnapshotFrame(): void {
@@ -341,7 +375,7 @@
 			await postJson("/api/session/delete", { id: target.id });
 			await loadSessions();
 			sessionMatches = sessionMatches.filter((match) => match.id !== target.id);
-			if (inspectorTab === "usage") usageRefreshToken += 1;
+			usageRefreshToken += 1;
 		} catch (error) {
 			logNotice(error instanceof Error ? error.message : String(error));
 		}
@@ -414,7 +448,7 @@
 	}
 
 	function configure(): void {
-		settingsOpen = true;
+		setPanel("settings");
 	}
 
 	async function refreshGit(): Promise<void> {
@@ -485,27 +519,46 @@
 
 <div class="prototype">
 		<main class="workspace">
-		<SessionSidebar
-			cwd={serverSnapshot?.cwd ?? ""}
-			workspaces={workspacePaths}
-			onWorkspaceSelect={selectWorkspace}
-			snapshot={serverSnapshot}
-			sessions={sessionSummaries}
-			matches={sessionMatches}
-			searching={sessionSearching}
-			onSessionSelect={selectSession}
-			onDeleteSession={requestDeleteSession}
-			onSearch={searchSessions}
-			onNewSession={newSession}
-			newSessionDisabled={state.phase === "running" || state.phase === "stopping"}
+		<ActivityBar
+			{activePanel}
+			onSelect={togglePanel}
+			gitCount={serverSnapshot?.git?.state === "ready" ? serverSnapshot.git.files.length : undefined}
+			running={serverSnapshot?.prompting === true}
+			workspacePath={serverSnapshot?.cwd ?? ""}
+			{theme}
+			onToggleTheme={toggleTheme}
+			onChooseWorkspace={() => (workspaceOpen = true)}
 		/>
+		{#if activePanel}
+			<button class="panel-backdrop" type="button" aria-label="Close panel" on:click={closePanel}></button>
+			<div class="panel-slot" id="side-panel" data-panel={activePanel}>
+				{#if activePanel === "sessions"}
+					<SessionSidebar
+						snapshot={serverSnapshot}
+						sessions={sessionSummaries}
+						matches={sessionMatches}
+						searching={sessionSearching}
+						onSessionSelect={selectSession}
+						onDeleteSession={requestDeleteSession}
+						onSearch={searchSessions}
+						onNewSession={newSession}
+						newSessionDisabled={state.phase === "running" || state.phase === "stopping"}
+					/>
+				{:else if activePanel === "changes"}
+					<ChangesPanel snapshot={serverSnapshot} state={state} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} />
+				{:else if activePanel === "usage"}
+					<UsagePanel snapshot={serverSnapshot} usageRefresh={usageRefreshToken} />
+				{:else}
+					<Settings />
+				{/if}
+			</div>
+		{/if}
 		<section class="main-panel" aria-label="Session workspace" style={`--composer-height: ${composerHeight}px`}>
 			<header class="session-bar">
 				<div class="session-title-block">
 					<div class="session-title-line"><h1 class="current-title" title={state.title}>{state.title}</h1>{#if serverSnapshot?.ready}<button class="icon-button rename-button" type="button" aria-label="Rename session" title="Rename session" disabled={sessionNameEditing} on:click={renameSession}><Pencil size={14} /></button>{/if}</div>
 					<div class="session-facts"><span class={`run-status ${state.phaseTone}`} aria-live="polite" title={state.sessionId || undefined}><span class="status-dot" aria-hidden="true"></span>{state.phaseLabel}</span><span>{state.messages.length} messages</span></div>
 				</div>
-				<div class="toolbar-actions"><button class="icon-button" type="button" aria-label={themeActionLabel} title={themeActionLabel} on:click={toggleTheme}>{#if theme === "light"}<Moon size={15} />{:else}<Sun size={15} />{/if}</button><button class="icon-button settings-trigger" type="button" aria-label="打开设置" title="打开设置" aria-expanded={settingsOpen} on:click={() => (settingsOpen = true)}><SettingsIcon size={17} /></button></div>
 			</header>
 			{#if uiError}<div class="ui-error" role="alert"><span>{uiError}</span><button class="icon-button" type="button" aria-label="关闭提示" on:click={() => (uiError = "")}><X size={15} /></button></div>{/if}
 			<Timeline state={state} onNoticeAction={noticeAction} onCopy={copyText} onReconnect={connectEvents}>
@@ -522,8 +575,14 @@
 				/>
 			</Timeline>
 		</section>
-		<Inspector state={state} snapshot={serverSnapshot} activeTab={inspectorTab} onTabSelect={selectInspectorTab} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} usageRefresh={usageRefreshToken} />
-		<Settings open={settingsOpen} onClose={() => (settingsOpen = false)} />
+		<WorkspacePicker
+			open={workspaceOpen}
+			cwd={serverSnapshot?.cwd ?? ""}
+			workspaces={workspacePaths}
+			busy={serverSnapshot?.prompting === true}
+			onSelect={(path) => { workspaceOpen = false; void selectWorkspace(path); }}
+			onClose={() => (workspaceOpen = false)}
+		/>
 		{#if pendingDelete}
 			<button class="confirm-backdrop" type="button" aria-label="Cancel session deletion" on:click={() => (pendingDelete = undefined)}></button>
 			<div class="confirm-panel" role="alertdialog" aria-modal="true" aria-labelledby="confirm-delete-title" aria-describedby="confirm-delete-text">

@@ -156,3 +156,39 @@
 		{/if}
 	</div>
 </SidePanel>
+
+<style>
+.session-block { padding: var(--space-3) 0; border-bottom: 1px solid var(--line); }
+.session-heading { display: flex; min-width: 0; align-items: baseline; gap: var(--space-2); }
+.session-heading > span:first-child { color: var(--text); font-size: var(--text-xs); font-weight: 650; }
+.session-counts { margin-left: auto; overflow: hidden; color: var(--text-subtle); font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.context-bar { display: flex; height: 9px; gap: 1px; margin: 10px 0 9px; overflow: hidden; border-radius: 3px; background: var(--line); }
+.context-segment { flex: 0 0 auto; }
+.context-segment.config, .context-dot.config { background: var(--accent); }
+.context-segment.user, .context-dot.user { background: var(--cyan); }
+.context-segment.tools, .context-dot.tools { background: var(--success); }
+.context-segment.assistant, .context-dot.assistant { background: var(--warning); }
+.context-legend { display: grid; gap: 5px; }
+.context-item { display: flex; min-width: 0; align-items: center; gap: 7px; font-size: var(--text-xs); }
+.context-dot { width: 8px; height: 8px; flex: 0 0 auto; border-radius: 2px; }
+.context-name { min-width: 0; flex: 1; overflow: hidden; color: var(--text-muted); text-overflow: ellipsis; white-space: nowrap; }
+.context-value { color: var(--text-subtle); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--text-xs); white-space: nowrap; }
+.session-foot { display: flex; align-items: baseline; gap: var(--space-2); padding-top: 11px; }
+.session-context-label { color: var(--text-subtle); font-size: var(--text-xs); }
+.session-token-total { margin-left: auto; color: var(--text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--text-xs); font-weight: 700; white-space: nowrap; }
+.session-token-total small { margin-left: 7px; color: var(--text-subtle); font-size: var(--text-xs); font-weight: 400; }
+.usage-summary { display: flex; align-items: baseline; gap: var(--space-2); padding: var(--space-3) 0; border-bottom: 1px solid var(--line); }
+.usage-range { color: var(--text-subtle); font-size: var(--text-xs); }
+.usage-total { margin-left: auto; color: var(--text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--text-sm); font-weight: 700; }
+.usage-cost { color: var(--text-subtle); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--text-xs); }
+.usage-days { display: flex; height: 96px; align-items: flex-end; gap: 3px; padding: 14px 0 6px; }
+.usage-day { display: flex; height: 100%; flex: 1; align-items: flex-end; }
+.usage-bar { width: 100%; border-radius: 2px 2px 0 0; background: var(--accent); }
+.usage-bar.empty { background: var(--line); }
+.usage-axis { display: flex; justify-content: space-between; padding-bottom: var(--space-3); border-bottom: 1px solid var(--line); color: var(--text-subtle); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--text-xs); }
+.usage-models { display: grid; }
+.usage-model { display: flex; align-items: center; gap: var(--space-2); padding: 9px 0; border-bottom: 1px solid var(--line); }
+.usage-model-key { min-width: 0; flex: 1; overflow: hidden; color: var(--text-muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.usage-model-value { color: var(--text); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--text-xs); white-space: nowrap; }
+.usage-model-value small { margin-left: 7px; color: var(--text-subtle); font-size: var(--text-xs); }
+</style>

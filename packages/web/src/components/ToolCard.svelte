@@ -151,3 +151,29 @@
 		{#if outputText(tool)}<CopyButton value={outputText(tool)} {onCopy} />{/if}
 	</div>
 </div>
+
+<style>
+.tool-row { min-width: 0; padding: 7px 0 var(--space-2); border-bottom: 1px solid var(--line); }
+.tool-toggle { display: flex; min-width: 0; width: 100%; flex-direction: column; gap: 2px; padding: 0; border: 0; background: transparent; text-align: left; cursor: pointer; }
+.tool-toggle:hover .tool-name { color: var(--accent); }
+.tool-head { display: flex; min-width: 0; align-items: center; gap: 6px; }
+.tool-name { min-width: 0; overflow: hidden; color: var(--text); font-size: var(--text-sm); font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.tool-name.error { color: var(--danger); }
+.tool-head :global(.tool-caret) { flex: 0 0 auto; color: var(--text-subtle); transition: transform .15s ease; }
+.tool-head :global(.tool-caret.open) { transform: rotate(180deg); }
+.tool-target { display: -webkit-box; overflow: hidden; color: var(--text-muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--text-sm); overflow-wrap: anywhere; white-space: pre-wrap; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.tool-target.tool-target-prompt { font-family: inherit; font-size: var(--text-xs); color: var(--text-subtle); -webkit-line-clamp: 2; }
+.tool-row.open .tool-target { display: block; }
+.tool-status-row { display: flex; min-width: 0; min-height: 25px; align-items: center; justify-content: space-between; gap: var(--space-2); margin-top: 1px; }
+.tool-status { color: var(--text-subtle); font-size: var(--text-xs); white-space: nowrap; }
+.tool-status.running { color: var(--accent); }
+.tool-status.error { color: var(--danger); }
+.tool-detail { color: var(--text-muted); font-size: var(--text-xs); }
+.tool-image-count { display: inline-flex; align-items: center; gap: var(--space-1); color: var(--text-subtle); font-size: var(--text-xs); }
+.tool-images { display: grid; gap: var(--space-2); margin-top: var(--space-2); }
+.tool-image { display: grid; gap: var(--space-1); margin: 0; }
+.tool-image img { max-width: 100%; max-height: 320px; border: 1px solid var(--line); border-radius: 5px; background: var(--code-bg); object-fit: contain; }
+.tool-image figcaption { color: var(--text-subtle); font-size: var(--text-xs); }
+.tool-meta { flex: 0 0 auto; color: var(--text-subtle); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--text-xs); white-space: nowrap; }
+.tool-subagent-name { flex: 0 0 auto; padding: 1px 6px; border: 1px solid var(--accent-line); border-radius: 3px; background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); font-size: var(--text-xs); font-weight: 600; letter-spacing: .02em; white-space: nowrap; }
+</style>

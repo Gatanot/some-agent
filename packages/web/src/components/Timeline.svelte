@@ -82,9 +82,11 @@
 			{/if}
 
 			{#if state.messages.length === 0 && state.unavailable}
-				<section class="empty-state">
-					<div class="empty-title">Connecting to the workspace</div>
-					<div class="empty-body">The current session appears once the connection is established.</div>
+				<section class="skeleton" role="status" aria-label="Connecting to the workspace">
+					<div class="skeleton-line" style="width: 58%"></div>
+					<div class="skeleton-line" style="width: 92%"></div>
+					<div class="skeleton-line" style="width: 84%"></div>
+					<div class="skeleton-line" style="width: 46%"></div>
 				</section>
 			{:else}
 				{#each state.messages as message (message.id)}
@@ -123,5 +125,46 @@
 			{/if}
 		</div>
 	</div>
-	<slot />
 </div>
+
+<style>
+.timeline-wrap { position: relative; min-height: 0; overflow-y: auto; background: var(--canvas); scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
+.timeline { display: flex; flex-direction: column; min-height: 100%; padding: 28px clamp(18px, 3vw, 48px) var(--space-4); }
+.timeline-inner { width: min(820px, 100%); flex: 1; margin: 0 auto; }
+.message { min-width: 0; margin-bottom: 28px; content-visibility: auto; contain-intrinsic-size: auto 120px; }
+.message-content { min-width: 0; color: var(--text); font-size: var(--text-md); line-height: 1.7; }
+.message.user .message-content { padding: 13px var(--space-4); border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--line)); border-radius: var(--radius-md); background: color-mix(in srgb, var(--surface-raised) 94%, var(--accent) 6%); box-shadow: 0 2px 8px var(--shadow); }
+.thinking { margin: 10px 0; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-raised); }
+.thinking summary { display: flex; min-height: 36px; align-items: center; gap: var(--space-2); padding: 7px 11px; cursor: pointer; list-style: none; user-select: none; }
+.thinking summary::-webkit-details-marker { display: none; }
+.thinking summary::before { order: 5; margin-left: auto; color: var(--text-subtle); content: "+"; font-size: var(--text-lg); line-height: 1; }
+.thinking[open] summary::before { content: "−"; }
+.thinking-label { color: var(--warning); font-size: var(--text-sm); }
+.thinking-content { padding: 0 var(--space-3) var(--space-3); color: var(--text-muted); font-size: var(--text-sm); }
+.tool-group { min-width: 0; }
+.message-image { margin: 10px 0; }
+.message-image img { max-width: 100%; max-height: 420px; border: 1px solid var(--line); border-radius: 5px; background: var(--code-bg); object-fit: contain; }
+.error-block { display: grid; gap: 9px; margin-top: var(--space-3); padding: 11px 13px; border: 1px solid var(--danger-line); border-radius: 4px; background: var(--danger-bg); color: var(--danger); }
+.error-actions { display: flex; }
+.error-retry { min-height: 28px; padding: 3px 10px; border: 1px solid var(--danger-line); background: transparent; color: var(--danger); font-size: var(--text-xs); cursor: pointer; }
+.error-retry:hover { border-color: var(--danger); }
+.notice { margin: var(--space-1) 0 23px; padding: 13px 15px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-raised); }
+.notice.empty { background: var(--surface-raised); }
+.notice.error { border-color: var(--danger-line); background: var(--danger-bg); }
+.notice.warning { border-color: var(--warning-line); background: var(--warning-bg); }
+.notice-title { font-weight: 650; }
+.notice-body { margin-top: var(--space-1); color: var(--text-muted); overflow-wrap: anywhere; }
+.notice-actions { display: flex; gap: var(--space-2); margin-top: 11px; }
+.skeleton { display: grid; gap: 11px; padding: 6px 0 34px; }
+.skeleton-line { height: 13px; border-radius: 4px; background: linear-gradient(90deg, var(--surface-soft) 25%, var(--surface-raised) 50%, var(--surface-soft) 75%); background-size: 200% 100%; animation: skeleton-sweep 1.5s ease-in-out infinite; }
+@keyframes skeleton-sweep { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.compaction-banner { position: sticky; top: 10px; z-index: 2; display: flex; align-items: center; gap: 9px; margin: 0 auto var(--space-3); width: min(760px, 100%); padding: 10px 13px; border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line)); border-radius: 10px; background: color-mix(in srgb, var(--accent) 10%, var(--surface)); color: var(--text-subtle); font-size: var(--text-sm); }
+.compaction-banner strong { color: var(--text); }
+.compaction-spinner { width: 12px; height: 12px; flex: 0 0 12px; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
+.connection-banner { position: absolute; z-index: 3; top: 12px; right: 18px; left: 18px; display: flex; min-height: 38px; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 9px 7px 13px; border: 1px solid var(--warning-line); border-radius: 5px; background: var(--warning-bg); box-shadow: 0 8px 24px var(--shadow); color: var(--warning); font-size: var(--text-sm); }
+.connection-banner strong { color: var(--text); }
+@media (max-width: 600px) {
+	.timeline { padding: 18px 14px var(--space-5); }
+	.connection-banner { right: 10px; left: 10px; }
+}
+</style>

@@ -25,3 +25,9 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+.output-block pre { overflow-x: auto; }
+.output-note { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 11px; border-top: 1px solid var(--line); color: var(--text-subtle); font-size: var(--text-xs); }
+.output-toggle { min-height: 26px; padding: 2px 9px; font-size: var(--text-xs); }
+</style>

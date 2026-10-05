@@ -119,3 +119,29 @@
 		{/if}
 	</div>
 </SidePanel>
+
+<style>
+.git-summary { display: flex; min-width: 0; align-items: center; gap: var(--space-2); padding: 13px 0; border-bottom: 1px solid var(--line); color: var(--accent); }
+.git-branch { min-width: 0; flex: 1; overflow: hidden; color: var(--text); font-size: var(--text-xs); font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+.git-total { color: var(--text-subtle); font-size: var(--text-xs); white-space: nowrap; }
+.git-overview { display: flex; gap: 15px; padding: 9px 0; border-bottom: 1px solid var(--line); color: var(--text-subtle); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--text-xs); }
+.git-file { display: grid; width: 100%; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: var(--space-2); padding: 9px var(--space-1); border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: transparent; text-align: left; cursor: pointer; }
+.git-file:hover { background: var(--surface-soft); }
+.git-file.selected { background: var(--surface-active); }
+.git-flag { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--text-xs); font-weight: 700; }
+.git-flag.untracked { color: var(--success); }
+.git-flag.conflict { color: var(--danger); }
+.git-file-detail { display: grid; min-width: 0; gap: 2px; }
+.git-path, .git-previous { overflow: hidden; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--text-xs); text-overflow: ellipsis; white-space: nowrap; }
+.git-previous { color: var(--text-subtle); font-size: var(--text-xs); }
+.git-file-meta { display: grid; justify-items: end; gap: 2px; }
+.git-stat { display: flex; gap: 5px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: var(--text-xs); }
+.git-stat ins { color: var(--success); text-decoration: none; }
+.git-stat del { color: var(--danger); text-decoration: none; }
+.git-diff { position: sticky; bottom: 0; margin: 0 -14px; border-top: 1px solid var(--line); background: var(--panel); }
+.git-diff-head { display: flex; min-width: 0; align-items: baseline; gap: var(--space-2); padding: var(--space-2) 14px; border-bottom: 1px solid var(--line); color: var(--text-subtle); font-size: var(--text-xs); }
+.git-diff-head code { min-width: 0; flex: 1; overflow: hidden; color: var(--text-muted); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; text-overflow: ellipsis; white-space: nowrap; }
+.git-diff-view { max-height: 42vh; padding: 6px 0; overflow: auto; font-size: var(--text-xs); }
+.git-diff-note { padding: 10px 14px; color: var(--text-subtle); font-size: var(--text-xs); }
+.git-diff-note.error { color: var(--danger); }
+</style>

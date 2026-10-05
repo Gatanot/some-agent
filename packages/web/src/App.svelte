@@ -103,6 +103,9 @@
 	// The panel open in this tab; restored on reload so the layout stays where the user left it.
 	let activePanel: PanelId | null = readPanelPreference();
 	let pendingDelete: { id: string; title: string } | undefined = undefined;
+	let confirmDialog: HTMLDialogElement;
+	$: if (pendingDelete && confirmDialog && !confirmDialog.open) confirmDialog.showModal();
+	$: if (!pendingDelete && confirmDialog?.open) confirmDialog.close();
 	let serverSnapshot: WebSnapshot | undefined;
 	// Snapshots are applied to `latestSnapshot` immediately and rendered at most once per frame so
 	// a burst of stream updates cannot force a full re-render per token.
@@ -120,9 +123,9 @@
 	let draftSessionId: string | undefined;
 	let draftBySession = new Map<string, string>();
 	let sessionNameEditing = false;
+	let sessionNameValue = "";
 	let usageRefreshToken = 0;
 	let state: AppState;
-	let composerHeight = 0;
 
 	function loadingState(): AppState {
 		return {
@@ -182,18 +185,41 @@
 		}
 	}
 
-	async function renameSession(): Promise<void> {
+	function focusSelect(node: HTMLInputElement): void {
+		node.focus();
+		node.select();
+	}
+
+	function beginRename(): void {
 		if (!serverSnapshot?.sessionId || sessionNameEditing) return;
-		const nextName = window.prompt("Session name", state.title);
-		if (nextName === null) return;
+		sessionNameValue = state.title;
 		sessionNameEditing = true;
+	}
+
+	function cancelRename(): void {
+		sessionNameEditing = false;
+	}
+
+	async function commitRename(): Promise<void> {
+		if (!sessionNameEditing) return;
+		const nextName = sessionNameValue.trim();
+		sessionNameEditing = false;
+		if (!serverSnapshot?.sessionId || nextName === "" || nextName === state.title) return;
 		try {
 			await postJson("/api/session/name", { name: nextName });
 			await loadSessions();
 		} catch (error) {
 			logNotice(error instanceof Error ? error.message : String(error));
-		} finally {
-			sessionNameEditing = false;
+		}
+	}
+
+	function handleRenameKeydown(event: KeyboardEvent): void {
+		if (event.key === "Enter") {
+			event.preventDefault();
+			void commitRename();
+		} else if (event.key === "Escape") {
+			event.preventDefault();
+			cancelRename();
 		}
 	}
 
@@ -553,27 +579,40 @@
 				{/if}
 			</div>
 		{/if}
-		<section class="main-panel" aria-label="Session workspace" style={`--composer-height: ${composerHeight}px`}>
+		<section class="main-panel" aria-label="Session workspace">
 			<header class="session-bar">
 				<div class="session-title-block">
-					<div class="session-title-line"><h1 class="current-title" title={state.title}>{state.title}</h1>{#if serverSnapshot?.ready}<button class="icon-button rename-button" type="button" aria-label="Rename session" title="Rename session" disabled={sessionNameEditing} on:click={renameSession}><Pencil size={14} /></button>{/if}</div>
+					<div class="session-title-line">
+						{#if sessionNameEditing}
+							<input
+								class="rename-input"
+								aria-label="Session name"
+								spellcheck="false"
+								bind:value={sessionNameValue}
+								use:focusSelect
+								on:keydown={handleRenameKeydown}
+								on:blur={() => void commitRename()}
+							/>
+						{:else}
+							<h1 class="current-title" title={state.title}>{state.title}</h1>
+							{#if serverSnapshot?.ready}<button class="icon-button rename-button" type="button" aria-label="Rename session" title="Rename session" on:click={beginRename}><Pencil size={14} /></button>{/if}
+						{/if}
+					</div>
 					<div class="session-facts"><span class={`run-status ${state.phaseTone}`} aria-live="polite" title={state.sessionId || undefined}><span class="status-dot" aria-hidden="true"></span>{state.phaseLabel}</span><span>{state.messages.length} messages</span></div>
 				</div>
 			</header>
 			{#if uiError}<div class="ui-error" role="alert"><span>{uiError}</span><button class="icon-button" type="button" aria-label="关闭提示" on:click={() => (uiError = "")}><X size={15} /></button></div>{/if}
-			<Timeline state={state} onNoticeAction={noticeAction} onCopy={copyText} onReconnect={connectEvents}>
-				<Composer
-					state={state}
-					draft={draftValue}
-					onDraftChange={updateDraft}
-					onSend={startPrompt}
-					onStop={stopPrompt}
-					onModelChange={changeModel}
-					onThinkingChange={changeThinkingLevel}
-					onFileSearch={searchFiles}
-					onHeightChange={(height) => (composerHeight = height)}
-				/>
-			</Timeline>
+			<Timeline state={state} onNoticeAction={noticeAction} onCopy={copyText} onReconnect={connectEvents} />
+			<Composer
+				state={state}
+				draft={draftValue}
+				onDraftChange={updateDraft}
+				onSend={startPrompt}
+				onStop={stopPrompt}
+				onModelChange={changeModel}
+				onThinkingChange={changeThinkingLevel}
+				onFileSearch={searchFiles}
+			/>
 		</section>
 		<WorkspacePicker
 			open={workspaceOpen}
@@ -583,10 +622,17 @@
 			onSelect={(path) => { workspaceOpen = false; void selectWorkspace(path); }}
 			onClose={() => (workspaceOpen = false)}
 		/>
-		{#if pendingDelete}
-			<button class="confirm-backdrop" type="button" aria-label="Cancel session deletion" on:click={() => (pendingDelete = undefined)}></button>
-			<div class="confirm-panel" role="alertdialog" aria-modal="true" aria-labelledby="confirm-delete-title" aria-describedby="confirm-delete-text">
-				<header class="settings-head">
+		<dialog
+			class="confirm-panel"
+			bind:this={confirmDialog}
+			role="alertdialog"
+			aria-labelledby="confirm-delete-title"
+			aria-describedby="confirm-delete-text"
+			on:close={() => (pendingDelete = undefined)}
+			on:click={(event) => { if (event.target === confirmDialog) pendingDelete = undefined; }}
+		>
+			{#if pendingDelete}
+				<header class="confirm-head">
 					<h2 id="confirm-delete-title">Delete session</h2>
 					<button class="icon-button" type="button" aria-label="Cancel session deletion" title="Cancel" on:click={() => (pendingDelete = undefined)}><X size={17} /></button>
 				</header>
@@ -597,7 +643,7 @@
 						<button class="danger-button" type="button" on:click={confirmDeleteSession}>Delete session</button>
 					</div>
 				</div>
-			</div>
-		{/if}
+			{/if}
+		</dialog>
 	</main>
 </div>

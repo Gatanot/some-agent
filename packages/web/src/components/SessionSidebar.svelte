@@ -128,3 +128,33 @@
 		{/if}
 	</nav>
 </SidePanel>
+
+<style>
+.session-search-row { flex: 0 0 auto; padding: 10px 10px 6px; }
+.session-search-row .search-wrap { flex: 1; min-width: 0; }
+.new-session-button { width: 35px; height: 35px; min-height: 35px; flex: 0 0 auto; }
+.search-wrap { position: relative; }
+.search-wrap > :global(svg) { position: absolute; top: 10px; left: 10px; color: var(--text-subtle); pointer-events: none; }
+.session-search { width: 100%; height: 35px; padding: 5px 10px 5px 34px; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: var(--surface); color: var(--text); }
+.session-search:focus { border-color: var(--accent); }
+.session-search::placeholder { color: var(--text-subtle); }
+.session-list { min-height: 0; flex: 1; padding: 6px 9px 18px; overflow: hidden auto; scrollbar-width: none; }
+.session-list::-webkit-scrollbar { display: none; }
+.session-period { margin: 0 var(--space-2) 7px; color: var(--text-subtle); font-size: var(--text-xs); font-weight: 650; }
+.session-entry { position: relative; display: flex; min-width: 0; align-items: stretch; }
+.session-item { display: grid; grid-template-columns: 8px minmax(0, 1fr); gap: 10px; flex: 1; width: 100%; min-height: 62px; padding: 11px 9px; border: 1px solid transparent; background: transparent; text-align: left; transition: background-color .15s ease, border-color .15s ease; }
+.session-item:hover { background: var(--surface-soft); }
+.session-item.current { border-color: var(--line); background: var(--surface-active); }
+.session-delete { position: absolute; top: 50%; right: 5px; width: 26px; height: 26px; transform: translateY(-50%); border: 1px solid var(--line); border-radius: 5px; background: var(--surface-raised); box-shadow: 0 2px 8px var(--shadow); color: var(--text-subtle); opacity: 0; pointer-events: none; transition: opacity .15s ease, background-color .15s ease, border-color .15s ease, color .15s ease; }
+.session-entry:hover .session-delete, .session-delete:focus-visible { opacity: 1; pointer-events: auto; }
+.session-delete:hover:not(:disabled) { border-color: var(--danger); background: var(--danger-bg); color: var(--danger); }
+.session-dot { width: 7px; height: 7px; margin-top: 6px; border-radius: 50%; background: var(--text-subtle); }
+.session-item.current .session-dot { background: var(--text-muted); }
+.session-dot.active { background: var(--success); }
+.session-copy { min-width: 0; }
+.session-title { display: block; overflow: hidden; color: var(--text); font-size: var(--text-sm); text-overflow: ellipsis; white-space: nowrap; }
+.session-snippet { display: -webkit-box; margin-top: var(--space-1); overflow: hidden; color: var(--text-subtle); font-size: var(--text-xs); line-height: 1.4; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.session-meta { display: flex; justify-content: space-between; gap: var(--space-2); margin-top: 5px; color: var(--text-subtle); font-size: var(--text-xs); }
+.session-meta span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.panel-placeholder { padding: 22px 10px; color: var(--text-subtle); text-align: center; }
+</style>

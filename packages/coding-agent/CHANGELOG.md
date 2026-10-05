@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the `subagent` tool: it runs a child agent in-process with the parent's active tools plus `end_task`, keeps the child transcript and events isolated from the main session, and returns the child's final report or a fatal error.
+
 ### Fixed
 
 - The web inspector now derives assistant and user/tool token counts from provider usage and prompt deltas, so the `Config` segment stops absorbing per-message estimation error and stays at its real size.

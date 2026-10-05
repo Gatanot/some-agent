@@ -130,6 +130,7 @@ import {
 } from "./system-prompt.ts";
 import { type BashOperations, createLocalBashOperations } from "./tools/bash.ts";
 import { createAllToolDefinitions } from "./tools/index.ts";
+import { createSubagentToolDefinition, SUBAGENT_TOOL_NAME } from "./tools/subagent.ts";
 import { createToolDefinitionFromAgentTool } from "./tools/tool-definition-wrapper.ts";
 import { addUsageToTotals, createUsageTotals } from "./usage-totals.ts";
 
@@ -3257,6 +3258,17 @@ export class AgentSession {
 		this.setActiveToolsByName([...new Set(nextActiveToolNames)]);
 	}
 
+	private _createSubagentToolDefinition(): ToolDefinition {
+		return createSubagentToolDefinition({
+			cwd: this._cwd,
+			parentAgent: this.agent,
+			getSystemPromptOptions: () => this._runSystemPromptOptions ?? this._baseSystemPromptOptions,
+			getCompactionSettings: (model) => this.settingsManager.getCompactionSettings(model),
+			getRetrySettings: () => this.settingsManager.getRetrySettings(),
+			getSummarizationAuth: (model, signal) => this._getSummarizationRequestAuth(model, signal),
+		}) as ToolDefinition;
+	}
+
 	private _buildRuntime(options: {
 		activeToolNames?: string[];
 		flagValues?: Map<string, boolean | string>;
@@ -3280,6 +3292,9 @@ export class AgentSession {
 		this._baseToolDefinitions = new Map(
 			Object.entries(baseToolDefinitions).map(([name, tool]) => [name, tool as ToolDefinition]),
 		);
+		if (!this._baseToolsOverride) {
+			this._baseToolDefinitions.set(SUBAGENT_TOOL_NAME, this._createSubagentToolDefinition());
+		}
 
 		const extensionsResult = this._resourceLoader.getExtensions();
 		if (options.flagValues) {
@@ -3303,7 +3318,7 @@ export class AgentSession {
 
 		const defaultActiveToolNames = this._baseToolsOverride
 			? Object.keys(this._baseToolsOverride)
-			: ["read", "bash", "edit", "write"];
+			: ["read", "bash", "edit", "write", SUBAGENT_TOOL_NAME];
 		const baseActiveToolNames = options.activeToolNames ?? defaultActiveToolNames;
 		this._refreshToolRegistry({
 			activeToolNames: baseActiveToolNames,

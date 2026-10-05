@@ -52,9 +52,9 @@ Values must be positive safe integers. An override applies to the model object t
 
 | Setting | Type | Default | Description |
 |---|---|---|---|
-| `defaultTools` | `string[]` | `read`, `bash`, `edit`, `write` | Built-in tools enabled at startup. An empty array disables all built-in tools but not extension or SDK tools. |
+| `defaultTools` | `string[]` | `read`, `bash`, `edit`, `write`, `subagent` | Built-in tools enabled at startup. An empty array disables all built-in tools but not extension or SDK tools. |
 
-Available built-in tools are `read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find`, and `ls`. CLI tool options override this setting for one invocation. See [Command Line](cli.md#tools).
+Available built-in tools are `read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find`, `ls`, and `subagent`. CLI tool options override this setting for one invocation. See [Command Line](cli.md#tools).
 
 ## Sessions and context
 

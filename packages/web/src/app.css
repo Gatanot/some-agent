@@ -166,7 +166,7 @@ button:disabled { cursor: default; opacity: .48; }
 .tool-copy { display: inline-flex; min-height: 25px; align-items: center; gap: 6px; padding: 2px 7px; border: 1px solid transparent; background: transparent; color: var(--text-muted); font-size: var(--text-xs); }
 .tool-copy:hover { border-color: var(--line-strong); color: var(--text); }
 .tool-copy.copied { border-color: var(--success-line); color: var(--success); }
-pre { margin: 0; padding: 11px; overflow-x: auto; color: var(--code-text); font-size: var(--text-xs); line-height: 1.6; tab-size: 2; white-space: pre; }
+pre { margin: 0; padding: 11px; overflow-x: auto; color: var(--code-text); font-size: var(--text-xs); line-height: 1.6; tab-size: 2; white-space: pre-wrap; overflow-wrap: anywhere; }
 .hljs-comment, .hljs-quote { color: var(--text-subtle); font-style: italic; }
 .hljs-keyword, .hljs-selector-tag, .hljs-literal, .hljs-meta, .hljs-meta-keyword, .hljs-built_in, .hljs-type { color: var(--accent); }
 .hljs-string, .hljs-regexp, .hljs-addition, .hljs-attribute, .hljs-meta-string { color: var(--success); }
@@ -178,7 +178,7 @@ pre { margin: 0; padding: 11px; overflow-x: auto; color: var(--code-text); font-
 .hljs-strong { font-weight: 700; }
 .tool-detail pre { max-height: none; padding: 3px 0 0; overflow-x: auto; font-size: var(--text-xs); white-space: pre-wrap; overflow-wrap: anywhere; }
 .tool-detail .tool-code, .tool-detail .tool-terminal, .tool-detail .tool-diff { margin-top: 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--code-bg); }
-.tool-detail .tool-code { max-height: 360px; padding: var(--space-2) 10px; overflow: auto; white-space: pre; }
+.tool-detail .tool-code { max-height: 360px; padding: var(--space-2) 10px; overflow: auto; }
 .tool-detail .tool-terminal { max-height: 360px; padding: var(--space-2) 10px; white-space: pre-wrap; }
 .tool-detail .tool-diff { max-height: 480px; padding: var(--space-1) 0; overflow: auto; }
 .tool-detail .tool-diff .diff-line { padding: 0 var(--space-2); }

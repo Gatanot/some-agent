@@ -29,6 +29,9 @@
 	$: contextWindow = selectedModel?.contextWindow;
 	$: contextPercent = contextWindow && Number.isFinite(usedTokens) ? Math.min(100, Math.round((usedTokens / contextWindow) * 100)) : undefined;
 	$: contextLabel = contextWindow ? `${contextPercent ?? 0}% · ${formatTokens(usedTokens)} / ${formatTokens(contextWindow)}` : state.usage;
+	const contextRingRadius = 6;
+	const contextRingCircumference = 2 * Math.PI * contextRingRadius;
+	$: contextRingOffset = contextRingCircumference * (1 - Math.min(100, Math.max(0, contextPercent ?? 0)) / 100);
 	$: mentionOpen = mention !== undefined && suggestions.length > 0;
 	$: modelGroups = [...new Set(state.models.map((model) => model.provider))].map((provider) => ({
 		provider,
@@ -185,7 +188,10 @@
 				</div>
 				<span class="context-usage" title={contextWindow ? `${formatTokens(usedTokens)} / ${formatTokens(contextWindow)} tokens` : state.usage}>
 					{#if contextWindow !== undefined}
-						<span class="context-meter" aria-hidden="true"><span class="context-meter-fill" style={`width: ${contextPercent ?? 0}%`}></span></span>
+						<svg class="context-ring" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+							<circle class="context-ring-track" cx="8" cy="8" r={contextRingRadius} />
+							<circle class="context-ring-fill" cx="8" cy="8" r={contextRingRadius} stroke-dasharray={contextRingCircumference} style={`stroke-dashoffset: ${contextRingOffset}`} />
+						</svg>
 					{/if}
 					{contextLabel}
 				</span>
@@ -218,8 +224,9 @@ textarea::placeholder { color: var(--text-subtle); }
 .composer-controls { justify-content: space-between; gap: 9px; padding-top: 5px; }
 .composer-selects { min-width: 0; gap: 6px; }
 .context-usage { display: inline-flex; min-width: 0; align-items: center; gap: 6px; margin-left: auto; color: var(--text-subtle); font-size: var(--text-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
-.context-meter { display: inline-block; width: 44px; height: 5px; flex: 0 0 auto; overflow: hidden; border-radius: 999px; background: var(--line); }
-.context-meter-fill { display: block; height: 100%; border-radius: inherit; background: var(--accent); transition: width .2s ease; }
+.context-ring { flex: 0 0 auto; transform: rotate(-90deg); }
+.context-ring-track { fill: none; stroke: var(--line); stroke-width: 2; }
+.context-ring-fill { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; transition: stroke-dashoffset .2s ease; }
 .composer-button { min-width: 78px; height: 32px; }
 .composer-button.send-button { min-width: 36px; width: 36px; padding: 0; }
 @media (max-width: 820px) {

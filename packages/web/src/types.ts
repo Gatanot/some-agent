@@ -20,6 +20,8 @@ export interface Tool {
 	status: ToolStatus;
 	statusText: string;
 	input: string;
+	/** Parsed tool arguments when the provider sent them; orphaned tool results have none. */
+	args?: Record<string, unknown>;
 	output: string | DiffLine[];
 	outputType?: "diff";
 	images?: ToolImage[];

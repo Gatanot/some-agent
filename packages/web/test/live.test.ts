@@ -60,6 +60,7 @@ test("maps assistant thinking and completed tool results into timeline messages"
 	assert.equal(state.messages[2]?.role, "tools");
 	assert.equal(state.messages[2]?.tools?.[0]?.status, "done");
 	assert.match(state.messages[2]?.tools?.[0]?.output as string, /parse/);
+	assert.deepEqual(state.messages[2]?.tools?.[0]?.args, { path: "src/parser.ts" });
 });
 
 test("reads totalTokens from assistant usage for context statistics", () => {
@@ -245,6 +246,40 @@ test("extracts the last user prompt so a failed turn can be retried", () => {
 	});
 	assert.equal(lastUserPromptText(value), "second");
 	assert.equal(lastUserPromptText(snapshot()), "");
+});
+
+test("summarizes a subagent prompt as the tool target and keeps the structured args", () => {
+	const state = snapshotToAppState(
+		snapshot({
+			messages: [
+				{
+					role: "assistant",
+					content: [
+						{
+							type: "toolCall",
+							id: "call-sub",
+							name: "subagent",
+							arguments: { prompt: "Inspect the parser\nand report back" },
+						},
+					],
+					timestamp: 1,
+				},
+				{
+					role: "toolResult",
+					toolCallId: "call-sub",
+					toolName: "subagent",
+					content: [{ type: "text", text: "Parser is fine." }],
+					isError: false,
+					timestamp: 2,
+				},
+			],
+		}),
+		"connected",
+	);
+
+	const tool = state.messages.find((message) => message.role === "tools")?.tools?.[0];
+	assert.equal(tool?.target, "Inspect the parser");
+	assert.deepEqual(tool?.args, { prompt: "Inspect the parser\nand report back" });
 });
 
 test("renders edit results as diff lines", () => {

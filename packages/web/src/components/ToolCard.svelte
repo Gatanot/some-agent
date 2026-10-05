@@ -7,8 +7,14 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { ChevronDown, Images } from "@lucide/svelte";
+	import BashToolDetail from "./BashToolDetail.svelte";
 	import CopyButton from "./CopyButton.svelte";
-	import type { DiffLine, Tool } from "../types.ts";
+	import EditToolDetail from "./EditToolDetail.svelte";
+	import GenericToolDetail from "./GenericToolDetail.svelte";
+	import ReadToolDetail from "./ReadToolDetail.svelte";
+	import SubagentToolDetail from "./SubagentToolDetail.svelte";
+	import WriteToolDetail from "./WriteToolDetail.svelte";
+	import type { Tool } from "../types.ts";
 
 	export let tool: Tool;
 	export let onCopy: (value: string) => Promise<boolean>;
@@ -51,12 +57,38 @@
 		return tool.status === "error" ? `Failed. Time ${timeText()}` : `Done. Time ${timeText()}`;
 	}
 
-	function diffLines(value: Tool): DiffLine[] {
-		return Array.isArray(value.output) ? value.output : [];
+	function outputText(value: Tool): string {
+		if (!Array.isArray(value.output)) return value.output;
+		return value.output
+			.map((line) => (line.kind === "add" ? `+${line.text}` : line.kind === "remove" ? `-${line.text}` : line.text))
+			.join("\n");
 	}
 
-	function outputText(value: Tool): string {
-		return Array.isArray(value.output) ? value.output.map((line) => line.text).join("\n") : value.output;
+	/** Compact per-tool summary shown next to the name so a collapsed card still says what changed. */
+	function headerMeta(): string {
+		if (tool.name === "edit" && Array.isArray(tool.output)) {
+			let added = 0;
+			let removed = 0;
+			for (const line of tool.output) {
+				if (line.kind === "add") added++;
+				else if (line.kind === "remove") removed++;
+			}
+			return added === 0 && removed === 0 ? "" : `+${added} −${removed}`;
+		}
+		if (tool.name === "write") {
+			const content = tool.args?.content;
+			if (typeof content !== "string") return "";
+			const lines = content === "" ? 0 : content.split("\n").length;
+			return `${lines} line${lines === 1 ? "" : "s"}`;
+		}
+		if (tool.name === "read") {
+			const offset = typeof tool.args?.offset === "number" ? tool.args.offset : undefined;
+			const limit = typeof tool.args?.limit === "number" ? tool.args.limit : undefined;
+			if (offset === undefined && limit === undefined) return "";
+			const start = offset ?? 1;
+			return limit === undefined ? `from line ${start}` : `lines ${start}–${start + limit - 1}`;
+		}
+		return "";
 	}
 </script>
 
@@ -64,6 +96,7 @@
 	<button class="tool-toggle" type="button" aria-expanded={open} aria-controls={detailId} on:click={toggle}>
 		<span class="tool-head">
 			<span class:error={tool.status === "error"} class="tool-name">{displayName()}</span>
+			{#if headerMeta()}<span class="tool-meta">{headerMeta()}</span>{/if}
 			<ChevronDown size={13} class={`tool-caret${open ? " open" : ""}`} aria-hidden="true" />
 		</span>
 		{#if tool.target}<span class="tool-target">{tool.target}</span>{/if}
@@ -81,10 +114,18 @@
 					{/each}
 				</div>
 			{/if}
-			{#if tool.outputType === "diff"}
-				<pre class="tool-output">{#each diffLines(tool) as line}<span class={`diff-line ${line.kind}`}>{line.text}</span>{/each}</pre>
-			{:else if tool.output || !tool.images?.length}
-				<pre class="tool-output">{tool.output || (tool.status === "running" ? "Waiting for result…" : "(no output)")}</pre>
+			{#if tool.name === "edit"}
+				<EditToolDetail {tool} />
+			{:else if tool.name === "write"}
+				<WriteToolDetail {tool} />
+			{:else if tool.name === "subagent"}
+				<SubagentToolDetail {tool} />
+			{:else if tool.name === "read"}
+				<ReadToolDetail {tool} />
+			{:else if tool.name === "bash" || tool.name === "powershell"}
+				<BashToolDetail {tool} />
+			{:else}
+				<GenericToolDetail {tool} />
 			{/if}
 		</div>
 	{/if}

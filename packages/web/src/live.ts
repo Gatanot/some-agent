@@ -49,9 +49,19 @@ function timestamp(value: unknown): string {
 	return new Date(value).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 }
 
-function toolTarget(args: unknown): string {
+/** First non-empty line, capped so a delegated prompt does not dominate the card header. */
+function firstLine(value: string): string {
+	const line = value.split("\n").find((candidate) => candidate.trim() !== "") ?? "";
+	return line.length > 120 ? `${line.slice(0, 119)}…` : line;
+}
+
+function toolTarget(name: string, args: unknown): string {
 	const values = record(args);
 	if (!values) return compactJson(args);
+	if (name === "subagent") {
+		const prompt = stringValue(values.prompt);
+		if (prompt) return firstLine(prompt);
+	}
 	for (const key of ["path", "file", "url", "query", "command", "pattern"]) {
 		const value = values[key];
 		if (typeof value === "string" && value) return value;
@@ -153,13 +163,15 @@ function toolFromCall(call: WireRecord, result: WireRecord | undefined, executio
 	const running = execution?.status === "running";
 	const outputValue = execution?.partialResult ?? execution?.result ?? result;
 	const rawArgs = call.arguments ?? execution?.args;
-	const timeout = record(rawArgs)?.timeout;
+	const args = record(rawArgs);
+	const timeout = args?.timeout;
 	const diff = diffOutput(outputValue);
 	const images = imagesFrom(outputValue);
 	return {
 		id,
 		name,
-		target: toolTarget(rawArgs),
+		target: toolTarget(name, rawArgs),
+		...(args ? { args } : {}),
 		status: running ? "running" : isError ? "error" : "done",
 		statusText: running ? "Running" : isError ? "Fail" : "Done",
 		input: compactJson(rawArgs),

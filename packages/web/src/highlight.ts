@@ -56,6 +56,51 @@ const aliases: Record<string, string> = {
 	h: "c",
 };
 
+const extensionLanguages: Record<string, string> = {
+	bash: "bash",
+	c: "c",
+	cc: "cpp",
+	cjs: "javascript",
+	cpp: "cpp",
+	css: "css",
+	cts: "typescript",
+	diff: "diff",
+	go: "go",
+	h: "c",
+	hpp: "cpp",
+	htm: "xml",
+	html: "xml",
+	java: "java",
+	js: "javascript",
+	json: "json",
+	jsx: "javascript",
+	md: "markdown",
+	markdown: "markdown",
+	mjs: "javascript",
+	mts: "typescript",
+	patch: "diff",
+	py: "python",
+	rs: "rust",
+	sh: "bash",
+	sql: "sql",
+	svg: "xml",
+	ts: "typescript",
+	tsx: "typescript",
+	xml: "xml",
+	yaml: "yaml",
+	yml: "yaml",
+	zsh: "bash",
+};
+
+/** Best-effort highlight.js language for a path, based only on its file extension. */
+export function languageFromPath(path: string | undefined): string | undefined {
+	if (!path) return undefined;
+	const name = path.split(/[\\/]/).pop() ?? "";
+	const dot = name.lastIndexOf(".");
+	if (dot <= 0) return undefined;
+	return extensionLanguages[name.slice(dot + 1).toLowerCase()];
+}
+
 function escapeHtml(value: string): string {
 	return value.replace(
 		/[&<>"']/g,

@@ -918,11 +918,13 @@ test("reads and updates pi settings", async () => {
 			compaction: { enabled: boolean; reserveTokens: number; keepRecentTokens: number };
 			modelThinkingLevels: unknown[];
 			modelContextWindows: unknown[];
+			subagent: Record<string, unknown>;
 		};
 		assert.equal(initialSettings.retry.enabled, false);
 		assert.equal(initialSettings.compaction.enabled, true);
 		assert.deepEqual(initialSettings.modelThinkingLevels, []);
 		assert.deepEqual(initialSettings.modelContextWindows, []);
+		assert.deepEqual(initialSettings.subagent, {});
 
 		const updated = await request(fixture.baseUrl, "/api/settings", {
 			method: "POST",
@@ -934,6 +936,8 @@ test("reads and updates pi settings", async () => {
 				compactionReserveTokens: 4096,
 				modelThinkingLevels: [{ provider: "faux", id: "web-test", level: "low" }],
 				modelContextWindows: [{ provider: "faux", id: "web-test", contextWindow: 65536 }],
+				subagentModel: { provider: "faux", id: "web-test-2" },
+				subagentContextWindow: 32768,
 			}),
 		});
 		assert.equal(updated.response.status, 200);
@@ -942,6 +946,7 @@ test("reads and updates pi settings", async () => {
 		assert.equal(updated.body.defaultThinkingLevel, "high");
 		assert.deepEqual(updated.body.modelThinkingLevels, [{ provider: "faux", id: "web-test", level: "low" }]);
 		assert.deepEqual(updated.body.modelContextWindows, [{ provider: "faux", id: "web-test", contextWindow: 65536 }]);
+		assert.deepEqual(updated.body.subagent, { provider: "faux", model: "web-test-2", contextWindow: 32768 });
 		assert.equal((updated.body.compaction as { enabled: boolean }).enabled, false);
 		assert.equal((updated.body.compaction as { reserveTokens: number }).reserveTokens, 4096);
 
@@ -982,6 +987,19 @@ test("reads and updates pi settings", async () => {
 			}),
 		});
 		assert.equal(invalidContext.response.status, 400);
+		const invalidSubagent = await request(fixture.baseUrl, "/api/settings", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ subagentContextWindow: 0 }),
+		});
+		assert.equal(invalidSubagent.response.status, 400);
+		const clearedSubagent = await request(fixture.baseUrl, "/api/settings", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ subagentModel: null, subagentContextWindow: null }),
+		});
+		assert.equal(clearedSubagent.response.status, 200);
+		assert.deepEqual(clearedSubagent.body.subagent, {});
 	} finally {
 		await fixture.close();
 	}

@@ -5,6 +5,7 @@
 ### Added
 
 - Added the `subagent` tool: it runs a child agent in-process with the parent's active tools plus `end_task`, keeps the child transcript and events isolated from the main session, and returns the child's final report or a fatal error.
+- Added `subagent.provider`/`subagent.model` and `subagent.contextWindow` settings to run the `subagent` tool on a different model or context window than the main agent, with the web settings page exposing both fields.
 
 ### Fixed
 

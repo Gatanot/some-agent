@@ -27,6 +27,16 @@ export interface CompactionSettings {
 	modelOverrides?: Record<string, CompactionModelOverride>; // exact "provider/modelId" keys
 }
 
+/**
+ * Subagent tool defaults. Model and context window each fall back to the main agent's
+ * settings when unset, so `{}` means "behave like the parent".
+ */
+export interface SubagentSettings {
+	provider?: string; // Model provider paired with `model`
+	model?: string; // Model id; absent pair inherits the main agent's current model
+	contextWindow?: number; // Positive token count; absent uses the resolved model's context window
+}
+
 export interface BranchSummarySettings {
 	reserveTokens?: number; // default: 16384 (tokens reserved for prompt + LLM response)
 	skipPrompt?: boolean; // default: false - when true, skips "Summarize branch?" prompt and defaults to no summary
@@ -114,6 +124,7 @@ export interface Settings {
 	defaultThinkingLevel?: ThinkingLevel;
 	modelThinkingLevels?: Record<string, ThinkingLevel>; // per-model default thinking level overrides keyed by "provider/modelId"
 	modelContextWindows?: Record<string, number>; // per-model context window overrides keyed by "provider/modelId"
+	subagent?: SubagentSettings; // Subagent tool model and context window defaults; unset fields inherit the main agent
 	transport?: TransportSetting; // default: "auto"
 	steeringMode?: "all" | "one-at-a-time";
 	followUpMode?: "all" | "one-at-a-time";
@@ -876,6 +887,64 @@ export class SettingsManager {
 			delete this.globalSettings.modelContextWindows;
 		}
 		this.markModified("modelContextWindows");
+		this.save();
+	}
+
+	private assertSubagentContextWindow(value: unknown): number {
+		if (typeof value !== "number" || !Number.isSafeInteger(value) || value <= 0) {
+			throw new Error(`Invalid subagent.contextWindow setting: ${String(value)}. Expected a positive safe integer.`);
+		}
+		return value;
+	}
+
+	/** Subagent overrides; empty fields inherit the main agent's model and resolved context window. */
+	getSubagentSettings(): SubagentSettings {
+		const subagent = this.settings.subagent;
+		if (!subagent) return {};
+		const result: SubagentSettings = {};
+		if (typeof subagent.provider === "string" && subagent.provider) result.provider = subagent.provider;
+		if (typeof subagent.model === "string" && subagent.model) result.model = subagent.model;
+		if (subagent.contextWindow !== undefined) {
+			result.contextWindow = this.assertSubagentContextWindow(subagent.contextWindow);
+		}
+		return result;
+	}
+
+	setSubagentModel(provider: string, modelId: string): void {
+		if (!provider || !modelId) {
+			throw new Error("Invalid subagent.model setting: provider and model are required.");
+		}
+		this.globalSettings.subagent ??= {};
+		this.globalSettings.subagent.provider = provider;
+		this.globalSettings.subagent.model = modelId;
+		this.markModified("subagent", "provider");
+		this.markModified("subagent", "model");
+		this.save();
+	}
+
+	clearSubagentModel(): void {
+		if (!this.globalSettings.subagent) return;
+		delete this.globalSettings.subagent.provider;
+		delete this.globalSettings.subagent.model;
+		if (Object.keys(this.globalSettings.subagent).length === 0) delete this.globalSettings.subagent;
+		this.markModified("subagent", "provider");
+		this.markModified("subagent", "model");
+		this.save();
+	}
+
+	setSubagentContextWindow(contextWindow: number): void {
+		this.assertSubagentContextWindow(contextWindow);
+		this.globalSettings.subagent ??= {};
+		this.globalSettings.subagent.contextWindow = contextWindow;
+		this.markModified("subagent", "contextWindow");
+		this.save();
+	}
+
+	clearSubagentContextWindow(): void {
+		if (!this.globalSettings.subagent) return;
+		delete this.globalSettings.subagent.contextWindow;
+		if (Object.keys(this.globalSettings.subagent).length === 0) delete this.globalSettings.subagent;
+		this.markModified("subagent", "contextWindow");
 		this.save();
 	}
 

@@ -56,6 +56,16 @@ Values must be positive safe integers. An override applies to the model object t
 
 Available built-in tools are `read`, `bash`, `powershell`, `edit`, `write`, `grep`, `find`, `ls`, and `subagent`. CLI tool options override this setting for one invocation. See [Command Line](cli.md#tools).
 
+### Subagents
+
+| Setting | Type | Default | Description |
+|---|---|---|---|
+| `subagent.provider` | string | None | Provider of the model used by the `subagent` tool. Requires `subagent.model`. |
+| `subagent.model` | string | None | Model ID used by the `subagent` tool. Unset falls back to the main agent's current model. |
+| `subagent.contextWindow` | number | None | Positive token override for the subagent's context window. Unset uses the resolved model's window. |
+
+The configured model must exist in the catalog and its provider must have configured auth; otherwise the child falls back to the main agent's current model. `subagent.contextWindow` also applies when the model is inherited, so a child can compact earlier than the parent. The subagent always starts with an empty transcript and never inherits the parent conversation.
+
 ## Sessions and context
 
 | Setting | Type | Default | Description |

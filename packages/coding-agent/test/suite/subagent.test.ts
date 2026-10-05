@@ -139,6 +139,57 @@ describe("subagent", () => {
 		}
 	});
 
+	it("runs the child on the configured subagent model and context window", async () => {
+		const harness = await createHarness({
+			models: [
+				{ id: "parent-model", name: "Parent", reasoning: true, contextWindow: 200000 },
+				{ id: "child-model", name: "Child", reasoning: true, contextWindow: 100000 },
+			],
+			settings: { subagent: { provider: "faux", model: "child-model", contextWindow: 32768 } },
+		});
+		try {
+			let childModelId: string | undefined;
+			let childContextWindow: number | undefined;
+			harness.setResponses([
+				fauxAssistantMessage(fauxToolCall("subagent", { prompt: "Do the thing" }), { stopReason: "toolUse" }),
+				(_context, _options, _state, model) => {
+					childModelId = model.id;
+					childContextWindow = model.contextWindow;
+					return fauxAssistantMessage("done");
+				},
+				fauxAssistantMessage("parent finished"),
+			]);
+
+			await harness.session.prompt("delegate");
+
+			expect(childModelId).toBe("child-model");
+			expect(childContextWindow).toBe(32768);
+		} finally {
+			harness.cleanup();
+		}
+	});
+
+	it("applies subagent.contextWindow to the inherited parent model", async () => {
+		const harness = await createHarness({ settings: { subagent: { contextWindow: 32768 } } });
+		try {
+			let childContextWindow: number | undefined;
+			harness.setResponses([
+				fauxAssistantMessage(fauxToolCall("subagent", { prompt: "Do the thing" }), { stopReason: "toolUse" }),
+				(_context, _options, _state, model) => {
+					childContextWindow = model.contextWindow;
+					return fauxAssistantMessage("done");
+				},
+				fauxAssistantMessage("parent finished"),
+			]);
+
+			await harness.session.prompt("delegate");
+
+			expect(childContextWindow).toBe(32768);
+		} finally {
+			harness.cleanup();
+		}
+	});
+
 	it("fails the tool when the child exceeds the turn limit", async () => {
 		const harness = await createHarness();
 		try {

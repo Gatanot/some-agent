@@ -2,9 +2,10 @@
  * Subagent tool.
  *
  * Runs a child agent in-process with the parent's active tools minus `subagent` plus
- * `end_task`. The child reuses the parent's model, stream function, tool hooks, system
- * prompt sources (including AGENTS.md context files), and compaction settings, but keeps
- * its own transcript and event stream. Events never reach the parent session.
+ * `end_task`. The child reuses the parent's model unless the `subagent` setting selects a
+ * different model or context window, and otherwise inherits the parent's stream function, tool
+ * hooks, system prompt sources (including AGENTS.md context files), and compaction settings, but
+ * keeps its own transcript and event stream. Events never reach the parent session.
  */
 
 import type { AgentMessage, AgentTool, AgentToolResult, AgentToolUpdateCallback } from "@gatanot/orrery-agent-core";
@@ -80,6 +81,8 @@ export interface SubagentRuntime {
 	cwd: string;
 	/** Parent agent; the child inherits its stream function, hooks, and loop options. */
 	parentAgent: Agent;
+	/** Resolved subagent model override; undefined inherits the parent agent's current model. */
+	getModelSelection?(): Model<any> | undefined;
 	/** Structured parent system prompt options; the child overrides tools and sections. */
 	getSystemPromptOptions(): NormalizedBuildSystemPromptOptions;
 	getCompactionSettings(model: Model<any>): CompactionSettings;
@@ -126,7 +129,7 @@ export async function runSubagent(
 	}
 
 	const parentAgent = runtime.parentAgent;
-	const model = parentAgent.state.model;
+	const model = runtime.getModelSelection?.() ?? parentAgent.state.model;
 	const sessionManager = SessionManager.inMemory(runtime.cwd);
 
 	let report: string | undefined;

@@ -369,6 +369,7 @@ function settingsView(manager: SettingsManager): WebSettings {
 		...(defaultThinkingLevel ? { defaultThinkingLevel } : {}),
 		modelThinkingLevels,
 		modelContextWindows,
+		subagent: manager.getSubagentSettings(),
 		...(manager.getEnabledModels() ? { enabledModels: manager.getEnabledModels() } : {}),
 		compaction: manager.getCompactionSettings(),
 		steeringMode: manager.getSteeringMode(),
@@ -451,6 +452,30 @@ function applySettingsPatch(manager: SettingsManager, body: Record<string, unkno
 			manager.removeModelContextWindow(provider, id);
 		}
 		for (const entry of entries) manager.setModelContextWindow(entry.provider, entry.id, entry.contextWindow);
+	}
+
+	if ("subagentModel" in body) {
+		const value = body.subagentModel;
+		if (value === null) {
+			manager.clearSubagentModel();
+		} else {
+			if (!isPlainObject(value) || typeof value.provider !== "string" || typeof value.id !== "string") {
+				throw new HttpRequestError(400, "subagentModel must be { provider, id } or null");
+			}
+			manager.setSubagentModel(value.provider, value.id);
+		}
+	}
+
+	if ("subagentContextWindow" in body) {
+		const value = body.subagentContextWindow;
+		if (value === null) {
+			manager.clearSubagentContextWindow();
+		} else {
+			if (!Number.isSafeInteger(value) || (value as number) <= 0) {
+				throw new HttpRequestError(400, "subagentContextWindow must be a positive integer or null");
+			}
+			manager.setSubagentContextWindow(value as number);
+		}
 	}
 
 	if ("compactionEnabled" in body) {

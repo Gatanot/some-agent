@@ -211,6 +211,25 @@
 		void patch({ defaultThinkingLevel: value });
 	}
 
+	function saveSubagentModel(value: string): void {
+		if (!value) {
+			void patch({ subagentModel: null });
+			return;
+		}
+		void patch({ subagentModel: splitKey(value) });
+	}
+
+	function saveSubagentContextWindow(raw: string): void {
+		const trimmed = raw.trim();
+		if (trimmed === "") {
+			void patch({ subagentContextWindow: null });
+			return;
+		}
+		const parsed = Number.parseInt(trimmed, 10);
+		if (!Number.isInteger(parsed) || parsed <= 0 || String(parsed) !== trimmed) return;
+		void patch({ subagentContextWindow: parsed });
+	}
+
 	function saveNumber(patchKey: string, raw: string): void {
 		const parsed = Number.parseInt(raw, 10);
 		if (!Number.isInteger(parsed) || parsed < 0) return;
@@ -373,6 +392,13 @@
 	}
 
 	$: defaultModelValue = settings?.defaultProvider && settings.defaultModel ? `${settings.defaultProvider}/${settings.defaultModel}` : "";
+	$: subagentModelValue =
+		settings?.subagent.provider && settings.subagent.model ? `${settings.subagent.provider}/${settings.subagent.model}` : "";
+	$: subagentContextValue =
+		settings?.subagent.contextWindow !== undefined ? String(settings.subagent.contextWindow) : "";
+	$: subagentContextPlaceholder = subagentModelValue
+		? String(catalog.find((model) => modelKey(model) === subagentModelValue)?.contextWindow ?? "模型默认值")
+		: "跟随主代理";
 	$: enabledModelKeys = settings?.enabledModels;
 	$: availableModels = [...new Set(catalog.map((model) => model.provider))].map((provider) => ({
 		provider,
@@ -447,6 +473,36 @@
 								<option value={level}>{level}</option>
 							{/each}
 						</select>
+					</label>
+				</section>
+
+				<section class="settings-section">
+					<h3>子代理</h3>
+					<p class="settings-note">subagent 工具的默认模型与上下文窗口；留空时跟随主代理的当前设置。</p>
+					<label class="settings-field">
+						<span>默认模型</span>
+						<select disabled={saving} value={subagentModelValue} on:change={(event) => saveSubagentModel(event.currentTarget.value)}>
+							<option value="">跟随主代理</option>
+							{#each selectableModelGroups as group (group.provider)}
+								<optgroup label={group.provider}>
+									{#each group.models as model (`${model.provider}/${model.id}`)}
+										<option value={modelKey(model)}>{model.name}</option>
+									{/each}
+								</optgroup>
+							{/each}
+						</select>
+					</label>
+					<label class="settings-field">
+						<span>上下文窗口</span>
+						<input
+							type="number"
+							min="1"
+							step="1024"
+							value={subagentContextValue}
+							placeholder={subagentContextPlaceholder}
+							disabled={saving}
+							on:change={(event) => saveSubagentContextWindow(event.currentTarget.value)}
+						/>
 					</label>
 				</section>
 

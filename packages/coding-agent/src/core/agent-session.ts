@@ -2123,6 +2123,28 @@ export class AgentSession {
 		return { ...model, contextWindow };
 	}
 
+	/**
+	 * Model for the subagent tool. A configured `subagent.provider`/`subagent.model` pair wins
+	 * when the catalog model exists and its provider has auth; otherwise the child inherits the
+	 * main agent's current model. `subagent.contextWindow` overrides the child's window only.
+	 */
+	private _resolveSubagentModel(): Model<any> | undefined {
+		const { provider, model: modelId, contextWindow } = this.settingsManager.getSubagentSettings();
+		if (!provider || !modelId) {
+			const current = this.model;
+			return current ? this._withSubagentContextWindow(current, contextWindow) : undefined;
+		}
+		const configured = this._modelRuntime.getModel(provider, modelId);
+		if (!configured || !this._modelRuntime.hasConfiguredAuth(configured.provider)) return undefined;
+		return this._withSubagentContextWindow(configured, contextWindow);
+	}
+
+	private _withSubagentContextWindow(model: Model<any>, contextWindow: number | undefined): Model<any> {
+		const effective = contextWindow ?? this.settingsManager.getModelContextWindow(model.provider, model.id);
+		if (effective === undefined || effective === model.contextWindow) return model;
+		return { ...model, contextWindow: effective };
+	}
+
 	/** Re-resolve the current model from the runtime and re-apply settings-derived overrides. */
 	refreshModelOverrides(): void {
 		const current = this.model;
@@ -3263,6 +3285,7 @@ export class AgentSession {
 			cwd: this._cwd,
 			parentAgent: this.agent,
 			getSystemPromptOptions: () => this._runSystemPromptOptions ?? this._baseSystemPromptOptions,
+			getModelSelection: () => this._resolveSubagentModel(),
 			getCompactionSettings: (model) => this.settingsManager.getCompactionSettings(model),
 			getRetrySettings: () => this.settingsManager.getRetrySettings(),
 			getSummarizationAuth: (model, signal) => this._getSummarizationRequestAuth(model, signal),

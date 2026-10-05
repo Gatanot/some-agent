@@ -139,12 +139,19 @@ export interface WebProviderOption {
 }
 
 /** Editable pi settings surfaced in the web settings page. */
+export interface WebSubagentSettings {
+	provider?: string;
+	model?: string;
+	contextWindow?: number;
+}
+
 export interface WebSettings {
 	defaultProvider?: string;
 	defaultModel?: string;
 	defaultThinkingLevel?: string;
 	modelThinkingLevels: WebSettingsModelThinkingLevel[];
 	modelContextWindows: WebSettingsModelContextWindow[];
+	subagent: WebSubagentSettings;
 	enabledModels?: string[];
 	compaction: { enabled: boolean; reserveTokens: number; keepRecentTokens: number };
 	steeringMode: "all" | "one-at-a-time";
@@ -157,6 +164,8 @@ export type WebSettingsPatch = Partial<{
 	defaultThinkingLevel: string | null;
 	modelThinkingLevels: WebSettingsModelThinkingLevel[];
 	modelContextWindows: WebSettingsModelContextWindow[];
+	subagentModel: { provider: string; id: string } | null;
+	subagentContextWindow: number | null;
 	enabledModels: string[];
 	compactionEnabled: boolean;
 	compactionReserveTokens: number;

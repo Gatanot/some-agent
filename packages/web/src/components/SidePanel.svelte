@@ -1,15 +1,20 @@
 <script lang="ts">
-	export let title: string;
+	/** Panel title shown in the header; only used when `header` is true. */
+	export let title = "";
 	export let ariaLabel = "";
 	/** Extra class on the root, used by the host to size the panel. */
 	export let className = "";
+	/** When false the panel renders without its header so content reaches the top. */
+	export let header = true;
 </script>
 
 <aside class={`side-panel ${className}`} aria-label={ariaLabel || title}>
-	<header class="side-panel-head">
-		<h2 class="side-panel-title">{title}</h2>
-		<div class="side-panel-actions"><slot name="actions" /></div>
-	</header>
+	{#if header}
+		<header class="side-panel-head">
+			<h2 class="side-panel-title">{title}</h2>
+			<div class="side-panel-actions"><slot name="actions" /></div>
+		</header>
+	{/if}
 	<div class="side-panel-body"><slot /></div>
 </aside>
 

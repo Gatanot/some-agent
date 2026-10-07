@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Plus, Search, Trash2 } from "@lucide/svelte";
+	import { Search, Trash2 } from "@lucide/svelte";
 	import type { WebSessionMatch, WebSessionSummary, WebSnapshot } from "../protocol.ts";
 	import SidePanel from "./SidePanel.svelte";
 
@@ -10,8 +10,6 @@
 	export let onSessionSelect: (id: string) => void;
 	export let onDeleteSession: (id: string) => void;
 	export let onSearch: (query: string) => void;
-	export let onNewSession: () => void;
-	export let newSessionDisabled = false;
 
 	let query = "";
 	$: onSearch(query);
@@ -58,19 +56,7 @@
 	$: needle = query.trim();
 </script>
 
-<SidePanel title="Sessions" ariaLabel="Session navigation" className="panel-sessions">
-	<button
-		slot="actions"
-		class="icon-button new-session-button"
-		type="button"
-		aria-label="New session"
-		title="New session"
-		disabled={newSessionDisabled}
-		on:click={onNewSession}
-	>
-		<Plus size={16} strokeWidth={1.9} />
-	</button>
-
+<SidePanel header={false} ariaLabel="Session navigation" className="panel-sessions">
 	<div class="session-search-row">
 		<div class="search-wrap">
 			<Search size={14} aria-hidden="true" />
@@ -132,7 +118,6 @@
 <style>
 .session-search-row { flex: 0 0 auto; padding: 10px 10px 6px; }
 .session-search-row .search-wrap { flex: 1; min-width: 0; }
-.new-session-button { width: 35px; height: 35px; min-height: 35px; flex: 0 0 auto; }
 .search-wrap { position: relative; }
 .search-wrap > :global(svg) { position: absolute; top: 10px; left: 10px; color: var(--text-subtle); pointer-events: none; }
 .session-search { width: 100%; height: 35px; padding: 5px 10px 5px 34px; border: 1px solid var(--line); border-radius: 5px; outline: 0; background: var(--surface); color: var(--text); }

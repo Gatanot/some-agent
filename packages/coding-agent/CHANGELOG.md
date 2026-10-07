@@ -6,6 +6,7 @@
 
 - Added the `subagent` tool: it runs a child agent in-process with the parent's active tools plus `end_task`, keeps the child transcript and events isolated from the main session, and returns the child's final report or a fatal error.
 - Added `subagent.provider`/`subagent.model` and `subagent.contextWindow` settings to run the `subagent` tool on a different model or context window than the main agent, with the web settings page exposing both fields.
+- The Orrery web UI side panel can now be resized by dragging the divider next to the timeline (220-560 px), and the chosen width persists per browser. The new-session button moved from the Sessions header to the top of the activity bar, and the Sessions panel renders without a header so search and history reach the top.
 
 ### Fixed
 

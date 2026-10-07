@@ -1,9 +1,11 @@
 <script lang="ts">
-	import { ChartColumn, FileDiff, FolderOpen, MessagesSquare, Moon, Settings as SettingsIcon, Sun } from "@lucide/svelte";
+	import { ChartColumn, FileDiff, FolderOpen, MessagesSquare, Moon, Plus, Settings as SettingsIcon, Sun } from "@lucide/svelte";
 	import type { PanelId } from "../types.ts";
 
 	export let activePanel: PanelId | null;
 	export let onSelect: (panel: PanelId) => void;
+	export let onNewSession: () => void;
+	export let newSessionDisabled = false;
 	export let gitCount: number | undefined = undefined;
 	export let running = false;
 	export let workspacePath = "";
@@ -19,6 +21,9 @@
 
 <nav class="activity-bar" aria-label="Panels and workspace">
 	<div class="activity-group">
+		<button class="activity-button" type="button" title="New session" aria-label="New session" disabled={newSessionDisabled} on:click={onNewSession}>
+			<Plus size={18} strokeWidth={1.8} aria-hidden="true" />
+		</button>
 		<button
 			class:active={activePanel === "sessions"}
 			class="activity-button"

@@ -102,6 +102,67 @@
 	let workspaceOpen = false;
 	// The panel open in this tab; restored on reload so the layout stays where the user left it.
 	let activePanel: PanelId | null = readPanelPreference();
+
+	const panelWidthStorageKey = "orrery.panelWidth";
+	const defaultPanelWidth = 280;
+	const minPanelWidth = 220;
+	const maxPanelWidth = 560;
+
+	function clampPanelWidth(value: number): number {
+		const viewportMax = Math.max(minPanelWidth, window.innerWidth - 320);
+		return Math.round(Math.min(maxPanelWidth, viewportMax, Math.max(minPanelWidth, value)));
+	}
+
+	function readPanelWidth(): number {
+		try {
+			const stored = Number(localStorage.getItem(panelWidthStorageKey));
+			if (Number.isFinite(stored) && stored > 0) return clampPanelWidth(stored);
+		} catch {
+			// Storage can be unavailable; fall through to the default width.
+		}
+		return clampPanelWidth(defaultPanelWidth);
+	}
+
+	function savePanelWidth(): void {
+		try {
+			localStorage.setItem(panelWidthStorageKey, String(panelWidth));
+		} catch {
+			// Storage can be unavailable; the width still changes for this visit.
+		}
+	}
+
+	let panelWidth = readPanelWidth();
+	let resizingPanel = false;
+	let resizeStartX = 0;
+	let resizeStartWidth = 0;
+
+	function startPanelResize(event: PointerEvent): void {
+		if (event.button !== 0) return;
+		resizingPanel = true;
+		resizeStartX = event.clientX;
+		resizeStartWidth = panelWidth;
+		event.currentTarget.setPointerCapture(event.pointerId);
+		event.preventDefault();
+	}
+
+	function movePanelResize(event: PointerEvent): void {
+		if (!resizingPanel) return;
+		// The panel sits on the right, so dragging left widens it.
+		panelWidth = clampPanelWidth(resizeStartWidth + (resizeStartX - event.clientX));
+	}
+
+	function stopPanelResize(): void {
+		if (!resizingPanel) return;
+		resizingPanel = false;
+		savePanelWidth();
+	}
+
+	function handlePanelResizeKeydown(event: KeyboardEvent): void {
+		if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+		event.preventDefault();
+		panelWidth = clampPanelWidth(panelWidth + (event.key === "ArrowLeft" ? 16 : -16));
+		savePanelWidth();
+	}
 	let pendingDelete: { id: string; title: string } | undefined = undefined;
 	let confirmDialog: HTMLDialogElement;
 	$: if (pendingDelete && confirmDialog && !confirmDialog.open) confirmDialog.showModal();
@@ -544,7 +605,7 @@
 </svelte:head>
 
 <div class="prototype">
-		<main class="workspace">
+		<main class="workspace" class:resizing={resizingPanel} style:--panel-width={`${panelWidth}px`}>
 		<ActivityBar
 			{activePanel}
 			onSelect={togglePanel}
@@ -554,10 +615,24 @@
 			{theme}
 			onToggleTheme={toggleTheme}
 			onChooseWorkspace={() => (workspaceOpen = true)}
+			onNewSession={newSession}
+			newSessionDisabled={state.phase === "running" || state.phase === "stopping"}
 		/>
 		{#if activePanel}
 			<button class="panel-backdrop" type="button" aria-label="Close panel" on:click={closePanel}></button>
 			<div class="panel-slot" id="side-panel" data-panel={activePanel}>
+				<button
+					class="panel-resize-handle"
+					type="button"
+					aria-label="Resize side panel"
+					title="Drag to resize"
+					on:pointerdown={startPanelResize}
+					on:pointermove={movePanelResize}
+					on:pointerup={stopPanelResize}
+					on:pointercancel={stopPanelResize}
+					on:lostpointercapture={stopPanelResize}
+					on:keydown={handlePanelResizeKeydown}
+				></button>
 				{#if activePanel === "sessions"}
 					<SessionSidebar
 						snapshot={serverSnapshot}
@@ -567,8 +642,6 @@
 						onSessionSelect={selectSession}
 						onDeleteSession={requestDeleteSession}
 						onSearch={searchSessions}
-						onNewSession={newSession}
-						newSessionDisabled={state.phase === "running" || state.phase === "stopping"}
 					/>
 				{:else if activePanel === "changes"}
 					<ChangesPanel snapshot={serverSnapshot} state={state} onRefreshGit={refreshGit} onGitDiff={loadGitDiff} />

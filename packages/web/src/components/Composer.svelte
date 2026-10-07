@@ -208,7 +208,7 @@
 </footer>
 
 <style>
-.composer { padding: 14px var(--space-5) 18px; background: var(--canvas); }
+.composer { position: sticky; z-index: 2; bottom: 0; padding: 14px var(--space-5) 18px; background: var(--canvas); }
 .composer-inner { width: min(820px, 100%); margin: 0 auto; }
 .composer-controls, .composer-selects, .composer-actions { display: flex; min-width: 0; align-items: center; }
 .composer-box { position: relative; padding: 13px 14px 10px; border: 1px solid var(--line-strong); border-radius: var(--radius-lg); background: var(--surface-raised); box-shadow: 0 8px 24px var(--shadow); }

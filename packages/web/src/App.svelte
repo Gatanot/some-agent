@@ -602,17 +602,19 @@
 				</div>
 			</header>
 			{#if uiError}<div class="ui-error" role="alert"><span>{uiError}</span><button class="icon-button" type="button" aria-label="关闭提示" on:click={() => (uiError = "")}><X size={15} /></button></div>{/if}
-			<Timeline state={state} onNoticeAction={noticeAction} onCopy={copyText} onReconnect={connectEvents} />
-			<Composer
-				state={state}
-				draft={draftValue}
-				onDraftChange={updateDraft}
-				onSend={startPrompt}
-				onStop={stopPrompt}
-				onModelChange={changeModel}
-				onThinkingChange={changeThinkingLevel}
-				onFileSearch={searchFiles}
-			/>
+			<div class="main-scroll">
+				<Timeline state={state} onNoticeAction={noticeAction} onCopy={copyText} onReconnect={connectEvents} />
+				<Composer
+					state={state}
+					draft={draftValue}
+					onDraftChange={updateDraft}
+					onSend={startPrompt}
+					onStop={stopPrompt}
+					onModelChange={changeModel}
+					onThinkingChange={changeThinkingLevel}
+					onFileSearch={searchFiles}
+				/>
+			</div>
 		</section>
 		<WorkspacePicker
 			open={workspaceOpen}

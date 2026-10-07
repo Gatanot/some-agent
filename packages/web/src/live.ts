@@ -117,10 +117,7 @@ function messageBlocks(message: WireRecord): Block[] {
 		if (!part) continue;
 		if (part.type === "text") {
 			const text = stringValue(part.text) ?? "";
-			if (text)
-				blocks.push(
-					text.length > 5_000 ? { type: "largeOutput", text } : { type: "text", text, html: renderMarkdown(text) },
-				);
+			if (text) blocks.push({ type: "text", text, html: renderMarkdown(text) });
 		} else if (part.type === "thinking") {
 			const text = stringValue(part.thinking) ?? "";
 			if (text) blocks.push({ type: "thinking", text, html: renderMarkdown(text) });

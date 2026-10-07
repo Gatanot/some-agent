@@ -35,7 +35,6 @@ export interface Tool {
 
 export type Block =
 	| { type: "text" | "thinking"; text: string; html: string }
-	| { type: "largeOutput"; text: string }
 	| { type: "code"; language: string; text: string }
 	| { type: "image"; mimeType: string; data: string };
 

@@ -1,8 +1,7 @@
 <script lang="ts">
 	import { RotateCw } from "@lucide/svelte";
-	import { afterUpdate } from "svelte";
+	import { afterUpdate, onMount } from "svelte";
 	import CopyButton from "./CopyButton.svelte";
-	import OutputBlock from "./OutputBlock.svelte";
 	import ToolCard from "./ToolCard.svelte";
 	import type { AppState } from "../types.ts";
 
@@ -12,11 +11,20 @@
 	export let onReconnect: () => void;
 
 	let timelineElement: HTMLDivElement;
+	let timelineHost: HTMLElement | undefined;
 	let wasAtEnd = true;
 
+	onMount(() => {
+		const host = timelineElement.parentElement;
+		if (!host) return;
+		timelineHost = host;
+		host.addEventListener("scroll", handleScroll, { passive: true });
+		return () => host.removeEventListener("scroll", handleScroll);
+	});
+
 	function handleScroll(): void {
-		if (!timelineElement) return;
-		wasAtEnd = timelineElement.scrollHeight - timelineElement.scrollTop - timelineElement.clientHeight < 90;
+		if (!timelineHost) return;
+		wasAtEnd = timelineHost.scrollHeight - timelineHost.scrollTop - timelineHost.clientHeight < 90;
 	}
 
 	function markdownCopy(node: HTMLElement): { destroy: () => void } {
@@ -48,13 +56,13 @@
 	}
 
 	afterUpdate(() => {
-		if (!timelineElement) return;
-		if (wasAtEnd) timelineElement.scrollTop = timelineElement.scrollHeight;
+		if (!timelineHost) return;
+		if (wasAtEnd) timelineHost.scrollTop = timelineHost.scrollHeight;
 		handleScroll();
 	});
 </script>
 
-<div class="timeline-wrap" bind:this={timelineElement} on:scroll={handleScroll}>
+<div class="timeline-wrap" bind:this={timelineElement}>
 	{#if state.phase === "compacting"}
 		<div class="compaction-banner" role="status" aria-live="polite">
 			<span class="compaction-spinner" aria-hidden="true"></span>
@@ -106,8 +114,6 @@
 										<details class="thinking"><summary><span class="thinking-label">Thinking...</span></summary><div class="thinking-content markdown-content" use:markdownCopy>{@html block.html}</div></details>
 									{:else if block.type === "code"}
 										<div class="code-block"><div class="code-head"><span>{block.language}</span><CopyButton value={block.text} {onCopy} label="Copy code" /></div><pre>{block.text}</pre></div>
-									{:else if block.type === "largeOutput"}
-										<OutputBlock text={block.text} {onCopy} />
 									{:else if block.type === "image"}
 										<figure class="message-image"><img src={`data:${block.mimeType};base64,${block.data}`} alt="Conversation attachment" loading="lazy" /></figure>
 									{/if}
@@ -128,8 +134,8 @@
 </div>
 
 <style>
-.timeline-wrap { position: relative; min-height: 0; overflow-y: auto; background: var(--canvas); scrollbar-color: var(--line-strong) transparent; scrollbar-width: thin; }
-.timeline { display: flex; flex-direction: column; min-height: 100%; padding: 28px clamp(18px, 3vw, 48px) var(--space-4); }
+.timeline-wrap { position: relative; min-height: 0; flex: 1 0 auto; }
+.timeline { display: flex; flex-direction: column; min-height: 100%; padding: 28px var(--space-5) var(--space-4); }
 .timeline-inner { width: min(820px, 100%); flex: 1; margin: 0 auto; }
 .message { min-width: 0; margin-bottom: 28px; content-visibility: auto; contain-intrinsic-size: auto 120px; }
 .message-content { min-width: 0; color: var(--text); font-size: var(--text-md); line-height: 1.7; }
@@ -163,8 +169,11 @@
 .compaction-spinner { width: 12px; height: 12px; flex: 0 0 12px; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 .connection-banner { position: absolute; z-index: 3; top: 12px; right: 18px; left: 18px; display: flex; min-height: 38px; align-items: center; justify-content: space-between; gap: 10px; padding: 7px 9px 7px 13px; border: 1px solid var(--warning-line); border-radius: 5px; background: var(--warning-bg); box-shadow: 0 8px 24px var(--shadow); color: var(--warning); font-size: var(--text-sm); }
 .connection-banner strong { color: var(--text); }
+@media (max-width: 820px) {
+	.timeline { padding-inline: 18px; }
+}
 @media (max-width: 600px) {
-	.timeline { padding: 18px 14px var(--space-5); }
+	.timeline { padding: 18px var(--space-3) var(--space-5); }
 	.connection-banner { right: 10px; left: 10px; }
 }
 </style>

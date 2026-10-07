@@ -5,6 +5,21 @@ import type { ImagesApi, ImagesModel } from "./types.ts";
 
 export const IMAGE_MODELS = {
 	openrouter: {
+		"black-forest-labs/flux-3-image": {
+			id: "black-forest-labs/flux-3-image",
+			name: "Black Forest Labs: FLUX.3 Image",
+			api: "openrouter-images",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			input: ["text", "image"],
+			output: ["image"],
+			cost: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+			},
+		} satisfies ImagesModel<"openrouter-images">,
 		"black-forest-labs/flux.2-flex": {
 			id: "black-forest-labs/flux.2-flex",
 			name: "Black Forest Labs: FLUX.2 Flex",
@@ -72,6 +87,21 @@ export const IMAGE_MODELS = {
 			provider: "openrouter",
 			baseUrl: "https://openrouter.ai/api/v1",
 			input: ["image", "text"],
+			output: ["image"],
+			cost: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+			},
+		} satisfies ImagesModel<"openrouter-images">,
+		"bytedance-seed/seedream-5-0-flash": {
+			id: "bytedance-seed/seedream-5-0-flash",
+			name: "ByteDance Seed: Seedream 5.0 Flash",
+			api: "openrouter-images",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			input: ["text", "image"],
 			output: ["image"],
 			cost: {
 				input: 0,
@@ -200,6 +230,21 @@ export const IMAGE_MODELS = {
 				cacheWrite: 0,
 			},
 		} satisfies ImagesModel<"openrouter-images">,
+		"google/gemini-nano-banana-2.1": {
+			id: "google/gemini-nano-banana-2.1",
+			name: "Google: Nano Banana 2.1",
+			api: "openrouter-images",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			input: ["image", "text"],
+			output: ["image", "text"],
+			cost: {
+				input: 1.5,
+				output: 7.5,
+				cacheRead: 0,
+				cacheWrite: 0,
+			},
+		} satisfies ImagesModel<"openrouter-images">,
 		"inclusionai/ming-image-0.1-design": {
 			id: "inclusionai/ming-image-0.1-design",
 			name: "inclusionAI: Ming Image 0.1 Design",
@@ -207,6 +252,21 @@ export const IMAGE_MODELS = {
 			provider: "openrouter",
 			baseUrl: "https://openrouter.ai/api/v1",
 			input: ["text"],
+			output: ["image"],
+			cost: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+			},
+		} satisfies ImagesModel<"openrouter-images">,
+		"inclusionai/ming-image-0.1-design-layer": {
+			id: "inclusionai/ming-image-0.1-design-layer",
+			name: "inclusionAI: Ming Image 0.1 Design Layer",
+			api: "openrouter-images",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			input: ["text", "image"],
 			output: ["image"],
 			cost: {
 				input: 0,
@@ -665,6 +725,21 @@ export const IMAGE_MODELS = {
 				cacheWrite: 0,
 			},
 		} satisfies ImagesModel<"openrouter-images">,
+		"recraft/recraft-v4.1-flash": {
+			id: "recraft/recraft-v4.1-flash",
+			name: "Recraft: Recraft V4.1 Flash",
+			api: "openrouter-images",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			input: ["text"],
+			output: ["image"],
+			cost: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+			},
+		} satisfies ImagesModel<"openrouter-images">,
 		"recraft/recraft-v4.1-pro": {
 			id: "recraft/recraft-v4.1-pro",
 			name: "Recraft: Recraft V4.1 Pro",
@@ -788,6 +863,21 @@ export const IMAGE_MODELS = {
 		"sourceful/riverflow-v2.5-pro": {
 			id: "sourceful/riverflow-v2.5-pro",
 			name: "Sourceful: Riverflow V2.5 Pro",
+			api: "openrouter-images",
+			provider: "openrouter",
+			baseUrl: "https://openrouter.ai/api/v1",
+			input: ["text", "image"],
+			output: ["image"],
+			cost: {
+				input: 0,
+				output: 0,
+				cacheRead: 0,
+				cacheWrite: 0,
+			},
+		} satisfies ImagesModel<"openrouter-images">,
+		"tencent/hy-image-v3.5-preview": {
+			id: "tencent/hy-image-v3.5-preview",
+			name: "Tencent: Hy Image 3.5 Preview",
 			api: "openrouter-images",
 			provider: "openrouter",
 			baseUrl: "https://openrouter.ai/api/v1",

@@ -1,6 +1,6 @@
 {
 	"name": "@gatanot/orrery-session-backend-sqlite-node",
-	"version": "0.2.7",
+	"version": "0.2.8",
 	"description": "Node sqlite session backend for @gatanot/orrery-agent-core sessions",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -35,8 +35,8 @@
 		"node": ">=22.19.0"
 	},
 	"dependencies": {
-		"@gatanot/orrery-ai": "^0.2.7",
-		"@gatanot/orrery-agent-core": "^0.2.7"
+		"@gatanot/orrery-ai": "^0.2.8",
+		"@gatanot/orrery-agent-core": "^0.2.8"
 	},
 	"devDependencies": {
 		"@vitest/coverage-v8": "4.1.9",

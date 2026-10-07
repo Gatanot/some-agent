@@ -1,6 +1,6 @@
 {
 	"name": "@gatanot/orrery-agent-core",
-	"version": "0.2.7",
+	"version": "0.2.8",
 	"description": "General-purpose agent with transport abstraction, state management, and attachment support",
 	"type": "module",
 	"main": "./dist/index.js",
@@ -59,9 +59,9 @@
 		"prepublishOnly": "npm run build"
 	},
 	"dependencies": {
-		"@gatanot/orrery-chord": "^0.2.7",
-		"@gatanot/orrery-ai": "^0.2.7",
-		"@gatanot/orrery-telemetry": "^0.2.7",
+		"@gatanot/orrery-chord": "^0.2.8",
+		"@gatanot/orrery-ai": "^0.2.8",
+		"@gatanot/orrery-telemetry": "^0.2.8",
 		"@mozilla/readability": "0.6.0",
 		"diff": "8.0.4",
 		"ignore": "7.0.8",

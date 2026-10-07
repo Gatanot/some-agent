@@ -190,15 +190,16 @@ describe("subagent", () => {
 		}
 	});
 
-	it("fails the tool when the child exceeds the turn limit", async () => {
+	it("does not cap the child's turn count", async () => {
 		const harness = await createHarness();
 		try {
-			const childTurns = Array.from({ length: 50 }, () =>
+			const childTurns = Array.from({ length: 51 }, () =>
 				fauxAssistantMessage(fauxToolCall("ls", { path: "." }), { stopReason: "toolUse" }),
 			);
 			harness.setResponses([
-				fauxAssistantMessage(fauxToolCall("subagent", { prompt: "Loop forever" }), { stopReason: "toolUse" }),
+				fauxAssistantMessage(fauxToolCall("subagent", { prompt: "Keep working" }), { stopReason: "toolUse" }),
 				...childTurns,
+				fauxAssistantMessage("child finished after 51 turns"),
 				fauxAssistantMessage("parent finished"),
 			]);
 
@@ -206,8 +207,8 @@ describe("subagent", () => {
 
 			const result = findSubagentResult(harness);
 			if (result?.role !== "toolResult") throw new Error("missing subagent tool result");
-			expect(result.isError).toBe(true);
-			expect(getMessageText(result)).toContain("turn limit");
+			expect(result.isError).toBe(false);
+			expect(getMessageText(result)).toBe("child finished after 51 turns");
 		} finally {
 			harness.cleanup();
 		}

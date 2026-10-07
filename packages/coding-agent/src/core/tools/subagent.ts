@@ -31,8 +31,6 @@ import {
 export const SUBAGENT_TOOL_NAME = "subagent";
 export const END_TASK_TOOL_NAME = "end_task";
 
-/** Hard cap so a runaway child cannot loop forever. Auto-compaction handles context size, not turn count. */
-const MAX_SUBAGENT_TURNS = 50;
 /** Minimum interval between streamed progress updates. */
 const PROGRESS_THROTTLE_MS = 150;
 
@@ -133,8 +131,6 @@ export async function runSubagent(
 	const sessionManager = SessionManager.inMemory(runtime.cwd);
 
 	let report: string | undefined;
-	let turnCount = 0;
-	let turnLimitExceeded = false;
 	let lastProgressText: string | undefined;
 	let lastProgressAt = 0;
 
@@ -189,11 +185,6 @@ export async function runSubagent(
 		},
 		finishTurn: () => {
 			if (report !== undefined) return { action: "end" };
-			turnCount += 1;
-			if (turnCount >= MAX_SUBAGENT_TURNS) {
-				turnLimitExceeded = true;
-				return { action: "end" };
-			}
 			return undefined;
 		},
 	});
@@ -233,10 +224,6 @@ export async function runSubagent(
 	if (signal?.aborted) {
 		throw new Error("Subagent aborted.");
 	}
-	if (turnLimitExceeded) {
-		throw new Error(`Subagent exceeded the ${MAX_SUBAGENT_TURNS} turn limit without finishing.`);
-	}
-
 	const lastAssistant = findLastAssistant(child.state.messages);
 	if (lastAssistant?.stopReason === "aborted") {
 		throw new Error("Subagent aborted.");

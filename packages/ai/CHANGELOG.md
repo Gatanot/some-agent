@@ -1,6 +1,10 @@
 # Changelog
 
-## [Unreleased]
+## [0.2.9] - 2026-10-10
+
+### Fixed
+
+- Kept the Moonshot Kimi K3 catalog price at zero cache-write cost. models.dev reports the input rate as `cache_write`, which inflated estimated costs.
 
 ## [0.2.8] - 2026-10-07
 

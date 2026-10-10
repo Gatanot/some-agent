@@ -7,8 +7,10 @@
  * this tui-free subset instead.
  */
 
+export { getModelsPath } from "./config.ts";
 export { AgentSession, type AgentSessionEvent } from "./core/agent-session.ts";
 export { estimateTokens } from "./core/compaction/compaction.ts";
 export { createAgentSession } from "./core/sdk.ts";
 export { type SessionEntry, type SessionInfo, SessionManager } from "./core/session-manager.ts";
 export { SettingsManager } from "./core/settings-manager.ts";
+export { stripJsonComments } from "./utils/json.ts";

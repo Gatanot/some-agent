@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -1037,6 +1037,60 @@ test("lists providers and refreshes a single provider catalog", async () => {
 		assert.equal(unknown.response.status, 404);
 	} finally {
 		await fixture.close();
+	}
+});
+
+test("adds, lists and removes a models.json provider", async () => {
+	const agentDir = await mkdtemp(join(tmpdir(), "orrery-web-agent-"));
+	const previousAgentDir = process.env.ORRERY_CODING_AGENT_DIR;
+	process.env.ORRERY_CODING_AGENT_DIR = agentDir;
+	const fixture = await createFixture([fauxAssistantMessage("unused")]);
+	try {
+		const initial = await request(fixture.baseUrl, "/api/providers/config");
+		assert.equal(initial.response.status, 200);
+		assert.deepEqual(initial.body.providers, []);
+
+		const created = await request(fixture.baseUrl, "/api/providers/config", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({
+				id: "local-ollama",
+				name: "Local Ollama",
+				baseUrl: "http://127.0.0.1:11434/v1",
+				api: "openai-completions",
+				apiKey: "ollama",
+				models: ["qwen2.5-coder:7b"],
+			}),
+		});
+		assert.equal(created.response.status, 200);
+		const configs = created.body.providers as Array<Record<string, unknown>>;
+		assert.equal(configs.length, 1);
+		assert.equal(configs[0]?.id, "local-ollama");
+		assert.equal(configs[0]?.baseUrl, "http://127.0.0.1:11434/v1");
+		assert.equal(configs[0]?.hasApiKey, true);
+		assert.deepEqual(configs[0]?.modelIds, ["qwen2.5-coder:7b"]);
+
+		const onDisk = JSON.parse(await readFile(join(agentDir, "models.json"), "utf8")) as {
+			providers: Record<string, { apiKey?: string; models?: Array<{ id: string }> }>;
+		};
+		assert.equal(onDisk.providers["local-ollama"]?.apiKey, "ollama");
+		assert.deepEqual(onDisk.providers["local-ollama"]?.models, [{ id: "qwen2.5-coder:7b" }]);
+
+		const invalid = await request(fixture.baseUrl, "/api/providers/config", {
+			method: "POST",
+			headers: { "content-type": "application/json" },
+			body: JSON.stringify({ id: "bad", baseUrl: "", api: "openai-completions" }),
+		});
+		assert.equal(invalid.response.status, 400);
+
+		const removed = await request(fixture.baseUrl, "/api/providers/config?id=local-ollama", { method: "DELETE" });
+		assert.equal(removed.response.status, 200);
+		assert.deepEqual(removed.body.providers, []);
+	} finally {
+		await fixture.close();
+		if (previousAgentDir === undefined) delete process.env.ORRERY_CODING_AGENT_DIR;
+		else process.env.ORRERY_CODING_AGENT_DIR = previousAgentDir;
+		await rm(agentDir, { recursive: true, force: true });
 	}
 });
 

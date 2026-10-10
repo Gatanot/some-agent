@@ -138,6 +138,19 @@ export interface WebProviderOption {
 	error?: string;
 }
 
+/**
+ * A models.json provider entry surfaced in the web settings page. API keys are never returned;
+ * `hasApiKey` only reports whether one is configured.
+ */
+export interface WebProviderConfig {
+	id: string;
+	name?: string;
+	baseUrl?: string;
+	api?: string;
+	hasApiKey: boolean;
+	modelIds: string[];
+}
+
 /** Editable pi settings surfaced in the web settings page. */
 export interface WebSubagentSettings {
 	provider?: string;

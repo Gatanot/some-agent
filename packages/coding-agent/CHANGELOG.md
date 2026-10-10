@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- The web settings page can now add and remove `models.json` providers (provider ID, API type, base URL, API key, and model IDs) and reload the catalog, instead of requiring manual file edits.
+
 ### Fixed
 
 - Assistant thinking blocks without summary text (signature-only responses from newer Claude models) now render a `Thinking...` placeholder in the TUI and web timelines instead of showing nothing.

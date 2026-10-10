@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { randomUUID } from "node:crypto";
-import { readdir, readFile, stat, unlink } from "node:fs/promises";
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from "node:fs/promises";
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { createRequire } from "node:module";
 import type { AddressInfo } from "node:net";
@@ -14,7 +14,7 @@ import type {
 	SessionInfo,
 	SettingsManager,
 } from "@gatanot/orrery/web-api";
-import { createAgentSession, SessionManager } from "@gatanot/orrery/web-api";
+import { createAgentSession, getModelsPath, SessionManager, stripJsonComments } from "@gatanot/orrery/web-api";
 import type { ViteDevServer } from "vite";
 import { contextBreakdown } from "./context.ts";
 import { parseFileLimit, searchProjectFiles } from "./files.ts";
@@ -23,6 +23,7 @@ import type {
 	WebEventEnvelope,
 	WebGitState,
 	WebModelOption,
+	WebProviderConfig,
 	WebProviderOption,
 	WebSessionMatch,
 	WebSessionSearchResponse,
@@ -718,6 +719,103 @@ function providerViews(): WebProviderOption[] {
 		.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 }
 
+/** APIs a models.json-only provider can select. Custom wire protocols still require a provider extension. */
+const CONFIGURABLE_PROVIDER_APIS = [
+	"openai-completions",
+	"openai-responses",
+	"anthropic-messages",
+	"google-generative-ai",
+	"google-vertex",
+	"mistral-conversations",
+	"azure-openai-responses",
+] as const;
+
+const PROVIDER_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+
+function isConfigurableProviderApi(value: string): boolean {
+	return (CONFIGURABLE_PROVIDER_APIS as readonly string[]).includes(value);
+}
+
+function isMissingFileError(error: unknown): boolean {
+	return error instanceof Error && (error as NodeJS.ErrnoException).code === "ENOENT";
+}
+
+/** Reads the raw provider map from models.json, tolerating a missing or empty file. */
+async function readModelsConfigProviders(): Promise<Record<string, Record<string, unknown>>> {
+	let contents: string;
+	try {
+		contents = await readFile(getModelsPath(), "utf8");
+	} catch (error) {
+		if (isMissingFileError(error)) return {};
+		throw new HttpRequestError(
+			500,
+			`无法读取 models.json: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
+	if (!contents.trim()) return {};
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(stripJsonComments(contents));
+	} catch (error) {
+		throw new HttpRequestError(
+			500,
+			`无法解析 models.json: ${error instanceof Error ? error.message : String(error)}`,
+		);
+	}
+	if (!isPlainObject(parsed)) throw new HttpRequestError(500, "models.json 顶层必须是对象");
+	const providers = parsed.providers;
+	if (providers === undefined) return {};
+	if (!isPlainObject(providers)) throw new HttpRequestError(500, "models.json 的 providers 必须是对象");
+	const result: Record<string, Record<string, unknown>> = {};
+	for (const [id, value] of Object.entries(providers)) {
+		if (isPlainObject(value)) result[id] = value;
+	}
+	return result;
+}
+
+/** Rewrites models.json with the given provider map. May drop comments from a hand-edited file. */
+async function writeModelsConfigProviders(providers: Record<string, Record<string, unknown>>): Promise<void> {
+	const path = getModelsPath();
+	await mkdir(dirname(path), { recursive: true });
+	await writeFile(path, `${JSON.stringify({ providers }, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+}
+
+function providerConfigView(id: string, value: Record<string, unknown>): WebProviderConfig {
+	const modelIds = Array.isArray(value.models)
+		? value.models.flatMap((model) => (isPlainObject(model) && typeof model.id === "string" ? [model.id] : []))
+		: [];
+	return {
+		id,
+		...(typeof value.name === "string" ? { name: value.name } : {}),
+		...(typeof value.baseUrl === "string" ? { baseUrl: value.baseUrl } : {}),
+		...(typeof value.api === "string" ? { api: value.api } : {}),
+		hasApiKey: typeof value.apiKey === "string" && value.apiKey.length > 0,
+		modelIds,
+	};
+}
+
+async function providerConfigViews(): Promise<WebProviderConfig[]> {
+	const providers = await readModelsConfigProviders();
+	return Object.entries(providers)
+		.map(([id, value]) => providerConfigView(id, value))
+		.sort((a, b) => a.id.localeCompare(b.id));
+}
+
+/** Reloads models.json inside the active session and broadcasts the refreshed catalog. */
+async function reloadModelsConfig(): Promise<void> {
+	const currentSession = runtime().session;
+	if (!currentSession) return;
+	await currentSession.modelRuntime.refresh({ force: true, allowNetwork: false });
+	runtime().sequence += 1;
+	broadcastSnapshot();
+}
+
+function isProviderConfigBusy(): boolean {
+	return Boolean(
+		runtime().sessionOperation || runtime().activePrompt || runtime().session?.isStreaming || runtime().aborting,
+	);
+}
+
 function sessionState(): WebSnapshot {
 	const currentSession = runtime().session;
 	const activeModel = currentSession?.model;
@@ -1160,6 +1258,123 @@ async function handle(request: IncomingMessage, response: ServerResponse): Promi
 
 	if (url.pathname === "/api/providers" && request.method === "GET") {
 		sendJson(response, 200, { providers: providerViews() });
+		return;
+	}
+
+	if (url.pathname === "/api/providers/config" && request.method === "GET") {
+		try {
+			sendJson(response, 200, { providers: await providerConfigViews() });
+		} catch (error) {
+			sendJson(response, error instanceof HttpRequestError ? error.status : 500, {
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/providers/config" && request.method === "POST") {
+		if (isProviderConfigBusy()) {
+			sendJson(response, 409, { error: "Cannot change providers while the agent is busy" });
+			return;
+		}
+		let body: Record<string, unknown>;
+		try {
+			body = await readBody(request);
+		} catch (error) {
+			const status = error instanceof HttpRequestError ? error.status : 400;
+			sendJson(response, status, { error: error instanceof Error ? error.message : String(error) });
+			return;
+		}
+		const id = typeof body.id === "string" ? body.id.trim() : "";
+		const baseUrl = typeof body.baseUrl === "string" ? body.baseUrl.trim() : "";
+		const api = typeof body.api === "string" ? body.api.trim() : "";
+		const name = typeof body.name === "string" ? body.name.trim() : "";
+		if (!PROVIDER_ID_PATTERN.test(id)) {
+			sendJson(response, 400, {
+				error: "供应商 ID 必须以字母或数字开头，只能包含字母、数字、点、下划线和连字符",
+			});
+			return;
+		}
+		if (!baseUrl) {
+			sendJson(response, 400, { error: "Base URL 不能为空" });
+			return;
+		}
+		if (!isConfigurableProviderApi(api)) {
+			sendJson(response, 400, { error: `不支持的 API 类型: ${api || "(空)"}` });
+			return;
+		}
+		if (body.name !== undefined && typeof body.name !== "string") {
+			sendJson(response, 400, { error: "name 必须是字符串" });
+			return;
+		}
+		if (body.apiKey !== undefined && typeof body.apiKey !== "string") {
+			sendJson(response, 400, { error: "apiKey 必须是字符串" });
+			return;
+		}
+		if (
+			body.models !== undefined &&
+			(!Array.isArray(body.models) || !body.models.every((model) => typeof model === "string"))
+		) {
+			sendJson(response, 400, { error: "models 必须是模型 ID 字符串数组" });
+			return;
+		}
+		const modelIds = Array.isArray(body.models)
+			? [...new Set((body.models as string[]).map((model) => model.trim()).filter(Boolean))]
+			: undefined;
+		try {
+			const providers = await readModelsConfigProviders();
+			const existing = providers[id] ?? {};
+			const next: Record<string, unknown> = { ...existing, baseUrl, api };
+			if (name) next.name = name;
+			if (body.apiKey !== undefined) {
+				if (body.apiKey === "") delete next.apiKey;
+				else next.apiKey = body.apiKey;
+			}
+			if (modelIds !== undefined) {
+				const existingModels = Array.isArray(existing.models) ? existing.models : [];
+				const byId = new Map<string, Record<string, unknown>>();
+				for (const model of existingModels) {
+					if (isPlainObject(model) && typeof model.id === "string") byId.set(model.id, model);
+				}
+				next.models = modelIds.map((modelId) => byId.get(modelId) ?? { id: modelId });
+			}
+			providers[id] = next;
+			await writeModelsConfigProviders(providers);
+			await reloadModelsConfig();
+			sendJson(response, 200, { providers: await providerConfigViews() });
+		} catch (error) {
+			sendJson(response, error instanceof HttpRequestError ? error.status : 500, {
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+		return;
+	}
+
+	if (url.pathname === "/api/providers/config" && request.method === "DELETE") {
+		if (isProviderConfigBusy()) {
+			sendJson(response, 409, { error: "Cannot change providers while the agent is busy" });
+			return;
+		}
+		const id = url.searchParams.get("id")?.trim() ?? "";
+		if (!id) {
+			sendJson(response, 400, { error: "缺少供应商 ID" });
+			return;
+		}
+		try {
+			const providers = await readModelsConfigProviders();
+			if (!(id in providers)) {
+				sendJson(response, 404, { error: `未找到供应商配置: ${id}` });
+				return;
+			}
+			delete providers[id];
+			await writeModelsConfigProviders(providers);
+			await reloadModelsConfig();
+			sendJson(response, 200, { providers: await providerConfigViews() });
+		} catch (error) {
+			sendJson(response, error instanceof HttpRequestError ? error.status : 500, {
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
 		return;
 	}
 

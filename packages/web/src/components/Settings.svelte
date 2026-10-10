@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ChevronDown, ChevronRight, RotateCcw, RotateCw } from "@lucide/svelte";
 	import { onMount } from "svelte";
-	import type { WebProviderOption, WebSettings } from "../protocol.ts";
+	import type { WebProviderConfig, WebProviderOption, WebSettings } from "../protocol.ts";
 	import type { ModelOption } from "../types.ts";
 	import { workspaceFetch } from "../workspace.ts";
 	import SidePanel from "./SidePanel.svelte";
@@ -23,6 +23,28 @@
 	let newProvider = "";
 	let newModelId = "";
 	let newLevel = "medium";
+
+	let providerConfigs: WebProviderConfig[] = [];
+	let addProviderOpen = false;
+	let newConfigId = "";
+	let newConfigName = "";
+	let newConfigBaseUrl = "";
+	let newConfigApi = "openai-completions";
+	let newConfigApiKey = "";
+	let newConfigModels = "";
+	let savingConfig = false;
+	let deletingConfig = "";
+	let configError = "";
+
+	const configurableApis = [
+		{ value: "openai-completions", label: "OpenAI Chat Completions" },
+		{ value: "openai-responses", label: "OpenAI Responses" },
+		{ value: "anthropic-messages", label: "Anthropic Messages" },
+		{ value: "google-generative-ai", label: "Google Generative AI" },
+		{ value: "google-vertex", label: "Google Vertex" },
+		{ value: "mistral-conversations", label: "Mistral Conversations" },
+		{ value: "azure-openai-responses", label: "Azure OpenAI Responses" },
+	];
 
 	let refreshingAll = false;
 	let refreshNotice = "";
@@ -85,6 +107,92 @@
 		providers = payload.providers ?? [];
 	}
 
+	async function loadProviderConfigs(): Promise<void> {
+		try {
+			const response = await workspaceFetch("/api/providers/config");
+			const payload = (await response.json()) as { providers?: WebProviderConfig[]; error?: string };
+			if (!response.ok) throw new Error(payload.error ?? "无法读取供应商配置");
+			providerConfigs = payload.providers ?? [];
+		} catch (cause) {
+			providerConfigs = [];
+			configError = cause instanceof Error ? cause.message : String(cause);
+		}
+	}
+
+	function resetProviderForm(): void {
+		newConfigId = "";
+		newConfigName = "";
+		newConfigBaseUrl = "";
+		newConfigApi = "openai-completions";
+		newConfigApiKey = "";
+		newConfigModels = "";
+		configError = "";
+	}
+
+	async function saveProviderConfig(): Promise<void> {
+		const id = newConfigId.trim();
+		const baseUrl = newConfigBaseUrl.trim();
+		if (!id || !baseUrl) {
+			configError = "请填写供应商 ID 和 Base URL";
+			return;
+		}
+		savingConfig = true;
+		configError = "";
+		try {
+			const body: Record<string, unknown> = { id, baseUrl, api: newConfigApi };
+			if (newConfigName.trim()) body.name = newConfigName.trim();
+			if (newConfigApiKey !== "") body.apiKey = newConfigApiKey;
+			const models = [
+				...new Set(
+					newConfigModels
+						.split(/[\s,]+/)
+						.map((value) => value.trim())
+						.filter(Boolean),
+				),
+			];
+			if (models.length > 0) body.models = models;
+			const response = await workspaceFetch("/api/providers/config", {
+				method: "POST",
+				headers: { "content-type": "application/json" },
+				body: JSON.stringify(body),
+			});
+			const payload = (await response.json().catch(() => ({}))) as {
+				providers?: WebProviderConfig[];
+				error?: string;
+			};
+			if (!response.ok) throw new Error(payload.error ?? `保存失败 (${response.status})`);
+			providerConfigs = payload.providers ?? providerConfigs;
+			resetProviderForm();
+			addProviderOpen = false;
+			await Promise.all([loadProviders(), loadCatalog()]);
+		} catch (cause) {
+			configError = cause instanceof Error ? cause.message : String(cause);
+		} finally {
+			savingConfig = false;
+		}
+	}
+
+	async function deleteProviderConfig(id: string): Promise<void> {
+		deletingConfig = id;
+		configError = "";
+		try {
+			const response = await workspaceFetch(`/api/providers/config?id=${encodeURIComponent(id)}`, {
+				method: "DELETE",
+			});
+			const payload = (await response.json().catch(() => ({}))) as {
+				providers?: WebProviderConfig[];
+				error?: string;
+			};
+			if (!response.ok) throw new Error(payload.error ?? `删除失败 (${response.status})`);
+			providerConfigs = payload.providers ?? providerConfigs;
+			await Promise.all([loadProviders(), loadCatalog()]);
+		} catch (cause) {
+			configError = cause instanceof Error ? cause.message : String(cause);
+		} finally {
+			deletingConfig = "";
+		}
+	}
+
 	async function loadSettings(): Promise<void> {
 		const id = ++requestId;
 		loading = true;
@@ -92,7 +200,12 @@
 		providerErrors = {};
 		providerNotices = {};
 		try {
-			const [next] = await Promise.all([requestSettings("/api/settings"), loadCatalog(), loadProviders()]);
+			const [next] = await Promise.all([
+				requestSettings("/api/settings"),
+				loadCatalog(),
+				loadProviders(),
+				loadProviderConfigs(),
+			]);
 			if (id === requestId) settings = next;
 		} catch (cause) {
 			if (id === requestId) error = cause instanceof Error ? cause.message : String(cause);
@@ -494,6 +607,87 @@
 
 				<section class="settings-section">
 					<div class="settings-section-head">
+						<h3>供应商配置</h3>
+						<button
+							class="secondary-button"
+							type="button"
+							disabled={saving || savingConfig}
+							on:click={() => {
+								addProviderOpen = !addProviderOpen;
+								if (!addProviderOpen) resetProviderForm();
+							}}
+						>
+							{addProviderOpen ? "取消" : "添加供应商"}
+						</button>
+					</div>
+					<p class="settings-note">写入 models.json，保存后立即生效；保存会重写文件，手写注释会丢失。API Key 可填字面量、$环境变量名 或 !命令，留空表示无需认证。</p>
+					{#if addProviderOpen}
+						<div class="provider-form">
+							<label class="settings-field">
+								<span>供应商 ID</span>
+								<input type="text" bind:value={newConfigId} placeholder="ollama" disabled={savingConfig} />
+							</label>
+							<label class="settings-field">
+								<span>显示名称</span>
+								<input type="text" bind:value={newConfigName} placeholder="可选" disabled={savingConfig} />
+							</label>
+							<label class="settings-field">
+								<span>API 类型</span>
+								<select bind:value={newConfigApi} disabled={savingConfig}>
+									{#each configurableApis as api (api.value)}
+										<option value={api.value}>{api.label}</option>
+									{/each}
+								</select>
+							</label>
+							<label class="settings-field">
+								<span>Base URL</span>
+								<input type="text" bind:value={newConfigBaseUrl} placeholder="http://localhost:11434/v1" disabled={savingConfig} />
+							</label>
+							<label class="settings-field">
+								<span>API Key</span>
+								<input type="password" bind:value={newConfigApiKey} placeholder="可选" autocomplete="off" disabled={savingConfig} />
+							</label>
+							<label class="settings-field provider-models-field">
+								<span>模型 ID</span>
+								<textarea bind:value={newConfigModels} placeholder="每行或用逗号分隔，例如 qwen2.5-coder:7b" rows="2" disabled={savingConfig}></textarea>
+							</label>
+							{#if configError}<div class="provider-error">{configError}</div>{/if}
+							<button
+								class="secondary-button"
+								type="button"
+								disabled={savingConfig || !newConfigId.trim() || !newConfigBaseUrl.trim()}
+								on:click={saveProviderConfig}
+							>
+								{savingConfig ? "保存中…" : "保存"}
+							</button>
+						</div>
+					{:else if configError}
+						<div class="provider-error">{configError}</div>
+					{/if}
+					{#if providerConfigs.length === 0 && !addProviderOpen}
+						<p class="settings-note">models.json 中还没有供应商配置。</p>
+					{:else}
+						{#each providerConfigs as config (config.id)}
+							<div class="provider-config-row">
+								<span class="settings-model" title={`${config.id} · ${config.api ?? "默认 API"}${config.hasApiKey ? " · 已配置 API Key" : ""}`}>
+									{config.id}
+									<small>{config.api ?? "默认 API"}{config.modelIds.length > 0 ? ` · ${config.modelIds.length} 个模型` : ""}{config.hasApiKey ? " · 已配置 Key" : ""}</small>
+								</span>
+								<button
+									class="quiet-button"
+									type="button"
+									disabled={saving || deletingConfig === config.id}
+									on:click={() => deleteProviderConfig(config.id)}
+								>
+									{deletingConfig === config.id ? "删除中…" : "删除"}
+								</button>
+							</div>
+						{/each}
+					{/if}
+				</section>
+
+				<section class="settings-section">
+					<div class="settings-section-head">
 						<h3>供应商与模型</h3>
 						<button
 							class="secondary-button"
@@ -708,4 +902,13 @@
 .context-reset { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--text-subtle); cursor: pointer; }
 .context-reset:hover:not(:disabled) { background: var(--surface-soft); color: var(--text); }
 .model-more { margin-top: var(--space-1); min-height: 26px; padding: 2px var(--space-2); font-size: var(--text-xs); }
+.provider-form { margin: var(--space-2) 0; padding: 10px 11px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); }
+.provider-form .settings-field { grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); }
+.provider-form .settings-field input, .provider-form .settings-field select, .provider-form .settings-field textarea { width: 100%; }
+.provider-form .settings-field input, .provider-form .settings-field textarea { height: 28px; padding: 2px 7px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--text); font-size: var(--text-xs); }
+.provider-form .settings-field textarea { height: auto; min-height: 52px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; resize: vertical; }
+.provider-form .secondary-button { margin-top: var(--space-1); }
+.provider-config-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 5px 0; border-bottom: 1px solid var(--line); }
+.provider-config-row:last-child { border-bottom: 0; }
+.provider-config-row small { margin-left: 6px; color: var(--text-subtle); font-size: var(--text-xs); }
 </style>

@@ -92,6 +92,17 @@ describe("AssistantMessageComponent", () => {
 		expect(rendered).toContain("answer");
 	});
 
+	test("shows a placeholder for signature-only thinking blocks without summary text", () => {
+		initTheme("dark");
+
+		const component = new AssistantMessageComponent(
+			createAssistantMessage([{ type: "thinking", thinking: "", thinkingSignature: "sig" }]),
+		);
+		const rendered = stripAnsi(component.render(80).join("\n"));
+
+		expect(rendered).toContain("Thinking...");
+	});
+
 	test("collapses individual thinking runs when clicked", () => {
 		initTheme("dark");
 		const component = new AssistantMessageComponent(

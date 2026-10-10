@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Assistant thinking blocks without summary text (signature-only responses from newer Claude models) now render a `Thinking...` placeholder in the TUI and web timelines instead of showing nothing.
+
 ## [0.2.8] - 2026-10-07
 
 ### Added

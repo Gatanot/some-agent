@@ -129,10 +129,6 @@ export class AssistantMessageComponent extends Container {
 				}
 				i--;
 
-				if (thinkingBlocks.length === 0) {
-					continue;
-				}
-
 				// Add spacing only when another visible assistant content block follows.
 				// This avoids a superfluous blank line before separately-rendered tool execution blocks.
 				const hasVisibleContentAfter = message.content
@@ -141,25 +137,29 @@ export class AssistantMessageComponent extends Container {
 
 				const runIndex = thinkingRunIndex++;
 				const hidden = this.thinkingVisibilityOverrides.get(runIndex) ?? this.hideThinkingBlock;
-				const thinkingComponent = hidden
-					? new Text(theme.italic(theme.fg("thinkingText", this.hiddenThinkingLabel)), this.outputPad, 0)
-					: new Markdown(
-							thinkingBlocks.join("\n\n"),
-							this.outputPad,
-							0,
-							this.markdownTheme,
-							{
-								color: (text: string) => theme.fg("thinkingText", text),
-								italic: true,
-							},
-							{
-								transform: createMarkdownTransform(
-									"assistant-thinking",
-									this.isStreaming,
-									this.markdownTransformers,
-								),
-							},
-						);
+				// Newer Claude models can return a signature-only thinking block with no
+				// summary text. Render the placeholder instead of dropping the block so the
+				// thinking phase stays visible.
+				const thinkingComponent =
+					hidden || thinkingBlocks.length === 0
+						? new Text(theme.italic(theme.fg("thinkingText", this.hiddenThinkingLabel)), this.outputPad, 0)
+						: new Markdown(
+								thinkingBlocks.join("\n\n"),
+								this.outputPad,
+								0,
+								this.markdownTheme,
+								{
+									color: (text: string) => theme.fg("thinkingText", text),
+									italic: true,
+								},
+								{
+									transform: createMarkdownTransform(
+										"assistant-thinking",
+										this.isStreaming,
+										this.markdownTransformers,
+									),
+								},
+							);
 				this.contentContainer.addChild(
 					new MouseRegion(thinkingComponent, (event) => {
 						if (event.type !== "click" || event.button !== "left") return undefined;

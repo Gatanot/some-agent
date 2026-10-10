@@ -63,6 +63,27 @@ test("maps assistant thinking and completed tool results into timeline messages"
 	assert.deepEqual(state.messages[2]?.tools?.[0]?.args, { path: "src/parser.ts" });
 });
 
+test("keeps signature-only assistant thinking blocks visible", () => {
+	const state = snapshotToAppState(
+		snapshot({
+			messages: [
+				{
+					role: "assistant",
+					content: [{ type: "thinking", thinking: "", thinkingSignature: "sig" }],
+					usage: { input: 1, output: 1, cacheRead: 0, cacheWrite: 0, total: 2 },
+					stopReason: "stop",
+					timestamp: 2,
+				},
+			],
+		}),
+		"connected",
+	);
+
+	assert.equal(state.messages.length, 1);
+	assert.equal(state.messages[0]?.blocks?.[0]?.type, "thinking");
+	assert.equal(state.messages[0]?.blocks?.[0]?.text, "");
+});
+
 test("reads totalTokens from assistant usage for context statistics", () => {
 	const state = snapshotToAppState(
 		snapshot({ contextUsage: { tokens: 150, contextWindow: 1000, percent: 15 } }),

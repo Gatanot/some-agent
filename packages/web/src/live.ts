@@ -120,7 +120,9 @@ function messageBlocks(message: WireRecord): Block[] {
 			if (text) blocks.push({ type: "text", text, html: renderMarkdown(text) });
 		} else if (part.type === "thinking") {
 			const text = stringValue(part.thinking) ?? "";
-			if (text) blocks.push({ type: "thinking", text, html: renderMarkdown(text) });
+			// Newer Claude models can return a signature-only thinking block with no summary
+			// text. Keep the block so the timeline still shows a "Thinking..." section.
+			blocks.push({ type: "thinking", text, html: text ? renderMarkdown(text) : "" });
 		} else if (part.type === "image") {
 			const data = stringValue(part.data);
 			const mimeType = stringValue(part.mimeType);

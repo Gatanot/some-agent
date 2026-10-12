@@ -248,7 +248,7 @@ describe("InteractiveMode compaction events", () => {
 
 	test("preserves steering behavior when flushing into an active agent run", async () => {
 		const fakeThis = {
-			compactionQueuedMessages: [{ text: "change direction", mode: "steer" as const }],
+			compactionQueuedMessages: [{ text: "change direction", mode: "steer" as const, images: [] }],
 			session: {
 				clearQueue: vi.fn(),
 				prompt: vi.fn().mockResolvedValue(undefined),
@@ -267,7 +267,10 @@ describe("InteractiveMode compaction events", () => {
 
 		await flushCompactionQueue.call(fakeThis, { willRetry: false });
 
-		expect(fakeThis.session.prompt).toHaveBeenCalledWith("change direction", { streamingBehavior: "steer" });
+		expect(fakeThis.session.prompt).toHaveBeenCalledWith("change direction", {
+			streamingBehavior: "steer",
+			images: undefined,
+		});
 		expect(fakeThis.compactionQueuedMessages).toEqual([]);
 		expect(fakeThis.showError).not.toHaveBeenCalled();
 	});

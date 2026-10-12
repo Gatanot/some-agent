@@ -115,7 +115,7 @@ import { hasTrustRequiringProjectResources, ProjectTrustStore } from "../../core
 import { getUsageCostBreakdown } from "../../core/usage-totals.ts";
 import { getChangelogPath, getNewEntries, normalizeChangelogLinks, parseChangelog } from "../../utils/changelog.ts";
 import { copyToClipboard, readClipboardText } from "../../utils/clipboard.ts";
-import { extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
+import { type ClipboardImage, extensionForImageMimeType, readClipboardImage } from "../../utils/clipboard-image.ts";
 import { parseGitUrl } from "../../utils/git.ts";
 import { getCwdRelativePath } from "../../utils/paths.ts";
 import { killTrackedDetachedChildren } from "../../utils/shell.ts";
@@ -231,9 +231,22 @@ class ExpandableText extends Text implements Expandable {
 	}
 }
 
+type PendingUserInput = {
+	text: string;
+	images: ImageContent[];
+};
+
+/** Marker inserted into the editor when a clipboard image is attached, e.g. `[image 1]`. */
+const IMAGE_MARKER_PATTERN = /\[image (\d+)\]/g;
+
+function optionalImages(images: ImageContent[]): ImageContent[] | undefined {
+	return images.length > 0 ? images : undefined;
+}
+
 type CompactionQueuedMessage = {
 	text: string;
 	mode: "steer" | "followUp";
+	images: ImageContent[];
 };
 
 type CompactionCostNotice = {
@@ -435,8 +448,11 @@ export class InteractiveMode {
 	private keybindings: KeybindingsManager;
 	private version: string;
 	private isInitialized = false;
-	private onInputCallback?: (text: string) => void;
-	private pendingUserInputs: string[] = [];
+	private onInputCallback?: (input: PendingUserInput) => void;
+	private pendingUserInputs: PendingUserInput[] = [];
+	/** Clipboard images attached to the next prompt, keyed by the id in their `[image N]` marker. */
+	private pendingImages = new Map<number, ImageContent>();
+	private pendingImageCounter = 0;
 	private activeStatusIndicator: StatusIndicator | undefined = undefined;
 	private activeWorkingIndicatorEmbedded = false;
 	private readonly idleStatus = new IdleStatus();
@@ -1191,7 +1207,9 @@ export class InteractiveMode {
 		while (true) {
 			const userInput = await this.getUserInput();
 			try {
-				await this.session.prompt(userInput);
+				await this.session.prompt(userInput.text, {
+					images: optionalImages(userInput.images),
+				});
 			} catch (error: unknown) {
 				const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
 				this.showError(errorMessage);
@@ -3039,13 +3057,12 @@ export class InteractiveMode {
 		try {
 			const image = await readClipboardImage();
 			if (image) {
-				const tmpDir = os.tmpdir();
-				const ext = extensionForImageMimeType(image.mimeType) ?? "png";
-				const fileName = `pi-clipboard-${crypto.randomUUID()}.${ext}`;
-				const filePath = path.join(tmpDir, fileName);
-				fs.writeFileSync(filePath, Buffer.from(image.bytes));
-
-				this.editor.insertTextAtCursor?.(filePath);
+				if (this.modelSupportsImages()) {
+					this.attachImage(image);
+				} else {
+					this.insertImagePath(image);
+					this.showStatus("Current model does not support images; inserted the file path instead");
+				}
 				this.ui.requestRender();
 				return;
 			}
@@ -3058,6 +3075,54 @@ export class InteractiveMode {
 		} catch {
 			// Silently ignore clipboard errors (may not have permission, etc.)
 		}
+	}
+
+	private modelSupportsImages(): boolean {
+		return this.session.model?.input.includes("image") ?? false;
+	}
+
+	/** Attach a clipboard image to the next prompt and insert a removable marker at the cursor. */
+	private attachImage(image: ClipboardImage): void {
+		this.pendingImageCounter += 1;
+		this.pendingImages.set(this.pendingImageCounter, {
+			type: "image",
+			data: Buffer.from(image.bytes).toString("base64"),
+			mimeType: image.mimeType,
+		});
+		this.editor.insertTextAtCursor?.(`[image ${this.pendingImageCounter}]`);
+	}
+
+	/** Fallback for models without image input: write the clipboard image to a temp file and insert its path. */
+	private insertImagePath(image: ClipboardImage): void {
+		const ext = extensionForImageMimeType(image.mimeType) ?? "png";
+		const filePath = path.join(os.tmpdir(), `pi-clipboard-${crypto.randomUUID()}.${ext}`);
+		fs.writeFileSync(filePath, Buffer.from(image.bytes));
+		this.editor.insertTextAtCursor?.(filePath);
+	}
+
+	/**
+	 * Detach images referenced by `[image N]` markers still present in the prompt and strip those markers.
+	 * Clears every pending image, so markers the user deleted are dropped instead of leaking into a later prompt.
+	 */
+	private takePendingImages(text: string): { text: string; images: ImageContent[] } {
+		if (this.pendingImages.size === 0) {
+			return { text, images: [] };
+		}
+		const images: ImageContent[] = [];
+		const used = new Set<number>();
+		const remaining = text.replace(IMAGE_MARKER_PATTERN, (match, rawId: string) => {
+			const id = Number(rawId);
+			const image = this.pendingImages.get(id);
+			if (!image) return match;
+			if (!used.has(id)) {
+				used.add(id);
+				images.push(image);
+			}
+			return "";
+		});
+		this.pendingImages.clear();
+		this.pendingImageCounter = 0;
+		return { text: remaining.trim(), images };
 	}
 
 	private handleStartupSubmit(text: string): void {
@@ -3237,7 +3302,8 @@ export class InteractiveMode {
 					this.editor.setText("");
 					await this.session.prompt(text);
 				} else {
-					this.queueCompactionMessage(text, "steer");
+					const { text: promptText, images } = this.takePendingImages(text);
+					this.queueCompactionMessage(promptText, "steer", images);
 				}
 				return;
 			}
@@ -3246,8 +3312,12 @@ export class InteractiveMode {
 			// This handles extension commands (execute immediately), prompt template expansion, and queueing
 			if (this.session.isStreaming) {
 				this.editor.addToHistory?.(text);
+				const { text: promptText, images } = this.takePendingImages(text);
 				this.editor.setText("");
-				await this.session.prompt(text, { streamingBehavior: "steer" });
+				await this.session.prompt(promptText, {
+					streamingBehavior: "steer",
+					images: optionalImages(images),
+				});
 				this.updatePendingMessagesDisplay();
 				this.ui.requestRender();
 				return;
@@ -3257,12 +3327,14 @@ export class InteractiveMode {
 			// First, move any pending bash components to chat
 			this.flushPendingBashComponents();
 
+			const { text: promptText, images } = this.takePendingImages(text);
+			const input: PendingUserInput = { text: promptText, images };
 			if (this.onInputCallback) {
-				this.onInputCallback(text);
+				this.onInputCallback(input);
 			} else {
-				this.pendingUserInputs.push(text);
+				this.pendingUserInputs.push(input);
 			}
-			this.editor.addToHistory?.(text);
+			this.editor.addToHistory?.(promptText);
 		};
 	}
 
@@ -3656,11 +3728,15 @@ export class InteractiveMode {
 	/** Extract text content from a user message */
 	private getUserMessageText(message: Message): string {
 		if (message.role !== "user") return "";
-		const textBlocks =
-			typeof message.content === "string"
-				? [{ type: "text", text: message.content }]
-				: message.content.filter((c: { type: string }) => c.type === "text");
-		return textBlocks.map((c) => (c as { text: string }).text).join("");
+		if (typeof message.content === "string") return message.content;
+		const text = message.content
+			.filter((c) => c.type === "text")
+			.map((c) => (c as { text: string }).text)
+			.join("");
+		const imageCount = message.content.filter((c) => c.type === "image").length;
+		if (imageCount === 0) return text;
+		const label = imageCount === 1 ? "[image]" : `[${imageCount} images]`;
+		return text ? `${text}\n\n${label}` : label;
 	}
 
 	/** Show a managed-tool status update in the chat. */
@@ -4081,16 +4157,16 @@ export class InteractiveMode {
 		);
 	}
 
-	async getUserInput(): Promise<string> {
+	async getUserInput(): Promise<PendingUserInput> {
 		const queuedInput = this.pendingUserInputs.shift();
 		if (queuedInput !== undefined) {
 			return queuedInput;
 		}
 
 		return new Promise((resolve) => {
-			this.onInputCallback = (text: string) => {
+			this.onInputCallback = (input: PendingUserInput) => {
 				this.onInputCallback = undefined;
-				resolve(text);
+				resolve(input);
 			};
 		});
 	}
@@ -4314,7 +4390,8 @@ export class InteractiveMode {
 				this.editor.setText("");
 				await this.session.prompt(text);
 			} else {
-				this.queueCompactionMessage(text, "followUp");
+				const { text: promptText, images } = this.takePendingImages(text);
+				this.queueCompactionMessage(promptText, "followUp", images);
 			}
 			return;
 		}
@@ -4323,8 +4400,12 @@ export class InteractiveMode {
 		// This handles extension commands (execute immediately), prompt template expansion, and queueing
 		if (this.session.isStreaming) {
 			this.editor.addToHistory?.(text);
+			const { text: promptText, images } = this.takePendingImages(text);
 			this.editor.setText("");
-			await this.session.prompt(text, { streamingBehavior: "followUp" });
+			await this.session.prompt(promptText, {
+				streamingBehavior: "followUp",
+				images: optionalImages(images),
+			});
 			this.updatePendingMessagesDisplay();
 			this.ui.requestRender();
 		}
@@ -4557,8 +4638,8 @@ export class InteractiveMode {
 		return allQueued.length;
 	}
 
-	private queueCompactionMessage(text: string, mode: "steer" | "followUp"): void {
-		this.compactionQueuedMessages.push({ text, mode });
+	private queueCompactionMessage(text: string, mode: "steer" | "followUp", images: ImageContent[]): void {
+		this.compactionQueuedMessages.push({ text, mode, images });
 		this.editor.addToHistory?.(text);
 		this.editor.setText("");
 		this.updatePendingMessagesDisplay();
@@ -4602,9 +4683,9 @@ export class InteractiveMode {
 					if (this.isExtensionCommand(message.text)) {
 						await this.session.prompt(message.text);
 					} else if (message.mode === "followUp") {
-						await this.session.followUp(message.text);
+						await this.session.followUp(message.text, optionalImages(message.images));
 					} else {
-						await this.session.steer(message.text);
+						await this.session.steer(message.text, optionalImages(message.images));
 					}
 				}
 				this.updatePendingMessagesDisplay();
@@ -4632,7 +4713,10 @@ export class InteractiveMode {
 
 			// Start a prompt when idle, or queue it into a run still finishing compaction.
 			const promptPromise = this.session
-				.prompt(firstPrompt.text, { streamingBehavior: firstPrompt.mode })
+				.prompt(firstPrompt.text, {
+					streamingBehavior: firstPrompt.mode,
+					images: optionalImages(firstPrompt.images),
+				})
 				.catch((error) => {
 					restoreQueue(error);
 				});
@@ -4642,9 +4726,9 @@ export class InteractiveMode {
 				if (this.isExtensionCommand(message.text)) {
 					await this.session.prompt(message.text);
 				} else if (message.mode === "followUp") {
-					await this.session.followUp(message.text);
+					await this.session.followUp(message.text, optionalImages(message.images));
 				} else {
-					await this.session.steer(message.text);
+					await this.session.steer(message.text, optionalImages(message.images));
 				}
 			}
 			this.updatePendingMessagesDisplay();

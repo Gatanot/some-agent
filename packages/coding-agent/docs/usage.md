@@ -16,7 +16,7 @@ To include files or images:
 
 - Type `@` to search for a file and add it to your prompt.
 - Press `Tab` to complete a path.
-- Paste an image or drag it into a compatible terminal.
+- Paste an image or drag it into a compatible terminal. Pi attaches it to the message and inserts an `[image N]` marker you can delete before sending.
 
 ## Follow Pi's work
 

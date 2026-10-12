@@ -6,6 +6,10 @@
 
 - The Orrery web server now falls back to the next free port (up to 20 attempts) when the configured port is already in use, instead of failing with EADDRINUSE. The bound address is printed on startup.
 
+### Changed
+
+- Pasting an image into the prompt now attaches it to the message directly (shown as a removable `[image N]` marker) instead of inserting the temp file path. When the active model does not support image input, Pi still inserts the path.
+
 ## [0.2.9] - 2026-10-10
 
 ### Added

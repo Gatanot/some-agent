@@ -24,6 +24,8 @@
 	}
 
 	$: selectedModel = state.models.find((model) => modelKey(model) === state.modelKey);
+	$: runningPhase = state.phase === "running" || state.phase === "compacting" || state.phase === "stopping";
+	$: activeModelName = selectedModel?.name ?? state.model;
 	$: modelSelectWidth = `${Math.max((selectedModel?.name.length ?? 12) + 5, 12)}ch`;
 	$: usedTokens = Number.parseInt(state.usage.replaceAll(",", "").split(" ")[0] ?? "", 10);
 	$: contextWindow = selectedModel?.contextWindow;
@@ -171,21 +173,28 @@
 				on:blur={handleBlur}
 			></textarea>
 			<div class="composer-controls">
-				<div class="composer-selects">
-					<select aria-label="Model" title={selectedModel?.name ?? "Model"} style={`width: ${modelSelectWidth}`} value={state.modelKey} disabled={state.models.length === 0 || state.phase === "running" || state.phase === "compacting" || state.phase === "stopping"} on:change={(event) => onModelChange(event.currentTarget.value)}>
-						{#if state.models.length === 0}<option value="">No models available</option>{/if}
-						{#each modelGroups as group (group.provider)}
-							<optgroup label={group.provider}>
-								{#each group.models as model (`${model.provider}/${model.id}`)}
-								<option value={modelKey(model)}>{model.name}</option>
+				{#if runningPhase}
+					<div class="composer-status" role="status" aria-live="polite">
+						<span class="composer-spinner" aria-hidden="true"></span>
+						<span class="composer-status-text">{state.phaseLabel} · {activeModelName}</span>
+					</div>
+				{:else}
+					<div class="composer-selects">
+						<select aria-label="Model" title={selectedModel?.name ?? "Model"} style={`width: ${modelSelectWidth}`} value={state.modelKey} disabled={state.models.length === 0 || state.phase === "running" || state.phase === "compacting" || state.phase === "stopping"} on:change={(event) => onModelChange(event.currentTarget.value)}>
+							{#if state.models.length === 0}<option value="">No models available</option>{/if}
+							{#each modelGroups as group (group.provider)}
+								<optgroup label={group.provider}>
+									{#each group.models as model (`${model.provider}/${model.id}`)}
+									<option value={modelKey(model)}>{model.name}</option>
+								{/each}
+								</optgroup>
 							{/each}
-							</optgroup>
-						{/each}
-					</select>
-					<select aria-label="Thinking level" title="Thinking level" value={state.thinkingLevel} disabled={state.noModel || state.phase === "running" || state.phase === "compacting" || state.phase === "stopping" || state.thinkingLevels.length < 2} on:change={(event) => onThinkingChange(event.currentTarget.value)}>
-						{#each state.thinkingLevels as level (level)}<option value={level}>{level}</option>{/each}
-					</select>
-				</div>
+						</select>
+						<select aria-label="Thinking level" title="Thinking level" value={state.thinkingLevel} disabled={state.noModel || state.phase === "running" || state.phase === "compacting" || state.phase === "stopping" || state.thinkingLevels.length < 2} on:change={(event) => onThinkingChange(event.currentTarget.value)}>
+							{#each state.thinkingLevels as level (level)}<option value={level}>{level}</option>{/each}
+						</select>
+					</div>
+				{/if}
 				<span class="context-usage" title={contextWindow ? `${formatTokens(usedTokens)} / ${formatTokens(contextWindow)} tokens` : state.usage}>
 					{#if contextWindow !== undefined}
 						<svg class="context-ring" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
@@ -223,6 +232,10 @@ textarea:focus-visible { outline: none; }
 textarea::placeholder { color: var(--text-subtle); }
 .composer-controls { justify-content: space-between; gap: 9px; padding-top: 5px; }
 .composer-selects { min-width: 0; gap: 6px; }
+.composer-status { display: inline-flex; min-width: 0; height: 28px; align-items: center; gap: 7px; color: var(--accent); font-size: var(--text-xs); }
+.composer-status-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.composer-spinner { width: 12px; height: 12px; flex: 0 0 12px; border: 2px solid color-mix(in srgb, var(--accent) 30%, transparent); border-top-color: var(--accent); border-radius: 50%; animation: composer-spin .8s linear infinite; }
+@keyframes composer-spin { to { transform: rotate(360deg); } }
 .context-usage { display: inline-flex; min-width: 0; align-items: center; gap: 6px; margin-left: auto; color: var(--text-subtle); font-size: var(--text-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
 .context-ring { flex: 0 0 auto; transform: rotate(-90deg); }
 .context-ring-track { fill: none; stroke: var(--line); stroke-width: 2; }

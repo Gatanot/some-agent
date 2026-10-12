@@ -195,7 +195,6 @@
 			sessionId: "",
 			phase: "unavailable",
 			phaseLabel: connectionStatus === "disconnected" ? "Disconnected" : "Connecting",
-			phaseTone: connectionStatus === "disconnected" ? "disconnected" : "idle",
 			connection: connectionStatus,
 			model: "Waiting for session",
 			modelKey: "",
@@ -671,7 +670,7 @@
 							{#if serverSnapshot?.ready}<button class="icon-button rename-button" type="button" aria-label="Rename session" title="Rename session" on:click={beginRename}><Pencil size={14} /></button>{/if}
 						{/if}
 					</div>
-					<div class="session-facts"><span class={`run-status ${state.phaseTone}`} aria-live="polite" title={state.sessionId || undefined}><span class="status-dot" aria-hidden="true"></span>{state.phaseLabel}</span><span>{state.messages.length} messages</span></div>
+					<div class="session-facts"><span>{state.messages.length} messages</span></div>
 				</div>
 			</header>
 			{#if uiError}<div class="ui-error" role="alert"><span>{uiError}</span><button class="icon-button" type="button" aria-label="关闭提示" on:click={() => (uiError = "")}><X size={15} /></button></div>{/if}

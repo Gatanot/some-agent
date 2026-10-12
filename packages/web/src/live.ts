@@ -386,7 +386,6 @@ export function snapshotToAppState(
 			sessionId: "",
 			phase: "unavailable",
 			phaseLabel: connection === "disconnected" ? "Disconnected" : "Unavailable",
-			phaseTone: connection === "disconnected" ? "disconnected" : "error",
 			connection,
 			model: "No model configured",
 			modelKey: "",
@@ -432,7 +431,6 @@ export function snapshotToAppState(
 						: hasError
 							? "Error"
 							: "Idle",
-		phaseTone: compacting ? "compacting" : running ? "running" : hasError ? "error" : "idle",
 		connection,
 		model: modelText(snapshot),
 		modelKey: snapshot.model ? JSON.stringify([snapshot.model.provider, snapshot.model.id]) : "",

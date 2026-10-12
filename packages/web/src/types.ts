@@ -3,7 +3,6 @@ export type PanelId = "sessions" | "changes" | "usage" | "settings";
 
 export type ToolStatus = "done" | "running" | "error";
 export type NoticeKind = "empty" | "history" | "error" | "warning";
-export type PhaseTone = "idle" | "running" | "compacting" | "error" | "disconnected";
 
 export interface DiffLine {
 	kind: "add" | "remove" | "context";
@@ -76,7 +75,6 @@ export interface AppState {
 	sessionId: string;
 	phase: string;
 	phaseLabel: string;
-	phaseTone: PhaseTone;
 	connection: "connected" | "disconnected" | "connecting";
 	model: string;
 	modelKey: string;

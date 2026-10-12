@@ -149,7 +149,6 @@ test("keeps streaming assistant and partial tool execution visible after refresh
 	);
 
 	assert.equal(state.phase, "running");
-	assert.equal(state.phaseTone, "running");
 	assert.equal(state.messages.at(-1)?.role, "assistant");
 	assert.equal(state.messages.at(-1)?.label, "Orrery · streaming");
 	const toolMessage = state.messages.find((message) => message.role === "tools");

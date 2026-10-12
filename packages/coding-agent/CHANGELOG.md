@@ -8,6 +8,7 @@
 
 ### Changed
 
+- The Orrery web UI now shows the running, compacting, and stopping status in the prompt composer, replacing the model and thinking selectors while they are unavailable. The session bar only reports the message count.
 - Pasting an image into the prompt now attaches it to the message directly (shown as a removable `[image N]` marker) instead of inserting the temp file path. When the active model does not support image input, Pi still inserts the path.
 
 ## [0.2.9] - 2026-10-10

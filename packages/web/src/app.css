@@ -141,11 +141,6 @@ button:disabled { cursor: default; opacity: .48; }
 .rename-button:hover { opacity: 1; }
 .rename-input { width: min(420px, 58vw); height: 28px; padding: 2px var(--space-2); border: 1px solid var(--accent-line); border-radius: 5px; background: var(--surface-raised); color: var(--text); font-size: var(--text-lg); font-weight: 680; }
 .session-facts { flex-wrap: wrap; gap: var(--space-2) 14px; color: var(--text-subtle); font-size: var(--text-xs); }
-.run-status { display: inline-flex; align-items: center; gap: 7px; color: var(--success); }
-.run-status.running { color: var(--accent); }
-.run-status.compacting { color: var(--accent); }
-.run-status.error { color: var(--danger); }
-.run-status.disconnected { color: var(--warning); }
 
 .message-content p { margin: 0 0 11px; overflow-wrap: anywhere; }
 .message-content p:last-child { margin-bottom: 0; }

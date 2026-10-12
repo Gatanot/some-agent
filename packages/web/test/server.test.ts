@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { type AddressInfo, createServer as createNetServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import test from "node:test";
@@ -54,6 +55,7 @@ interface Fixture {
 interface FixtureOptions {
 	blockSelection?: boolean;
 	git?: boolean;
+	port?: number;
 }
 
 async function readJson(response: Response): Promise<JsonObject> {
@@ -294,7 +296,7 @@ async function createFixture(
 	};
 	const server = await startWebServer({
 		cwd,
-		port: 0,
+		port: options.port ?? 0,
 		mode: "production",
 		sessionFactory: factory,
 		sessionLister: lister,
@@ -320,6 +322,27 @@ async function createFixture(
 		},
 	};
 }
+
+test("starts on the next port when the configured port is already in use", async () => {
+	const blocker = createNetServer();
+	await new Promise<void>((resolve) => blocker.listen(0, "127.0.0.1", resolve));
+	const blockedPort = (blocker.address() as AddressInfo).port;
+	try {
+		const fixture = await createFixture([fauxAssistantMessage("fallback")], [], { port: blockedPort });
+		try {
+			assert.ok(fixture.server.port > blockedPort);
+			const state = await request(fixture.baseUrl, "/api/state");
+			assert.equal(state.response.status, 200);
+			assert.equal(state.body.ready, true);
+		} finally {
+			await fixture.close();
+		}
+	} finally {
+		await new Promise<void>((resolve, reject) => {
+			blocker.close((error) => (error ? reject(error) : resolve()));
+		});
+	}
+});
 
 test("refreshes Git status after an agent turn and on request", async () => {
 	let workingDirectory = "";

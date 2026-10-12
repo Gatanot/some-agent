@@ -9,7 +9,7 @@
 - 永远只有个人使用，不设计多用户、账号、角色、租户、协作或组织管理。
 - Web UI 是 Orrery 的个人编码工作台，复用现有 agent、工具和 session 存储。
 - 默认本机运行。当前入口为 `npm run web`，地址为 `http://127.0.0.1:3210`。
-- 当前用 `PI_WEB_CWD` 指定工作目录、`PI_WEB_PORT` 指定端口。
+- 当前用 `PI_WEB_CWD` 指定工作目录、`PI_WEB_PORT` 指定端口；端口被占用时自动尝试相邻端口。
 - 先仔细设计页面，再继续实现功能。本文中的布局、配色和交互属于建议，尚未定稿。
 - 本文专门记录 Web UI；已有 [Extension/TUI 路线图](orrery-extension-tui-roadmap.md) 中“终端为主要产品表面”的定位不限制本次 Web UI 开发。
 

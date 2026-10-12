@@ -68,6 +68,7 @@ const MAX_SEARCH_LIMIT = 200;
 const SNIPPET_CONTEXT = 60;
 const MAX_WORKSPACES = 8;
 const MAX_BROWSE_ENTRIES = 300;
+const MAX_PORT_ATTEMPTS = 20;
 
 interface WorkspaceRuntime {
 	id: string;
@@ -1922,6 +1923,48 @@ function resolveListenPort(value: number): number {
 	return value;
 }
 
+function isAddressInUse(error: unknown): boolean {
+	return error instanceof Error && (error as NodeJS.ErrnoException).code === "EADDRINUSE";
+}
+
+/** Binds loopback at `candidatePort` and resolves with the actual port, including OS-assigned port 0. */
+function listenOnPort(httpServer: Server, candidatePort: number): Promise<number> {
+	return new Promise<number>((resolveListen, rejectListen) => {
+		const onError = (error: Error): void => {
+			httpServer.off("listening", onListening);
+			rejectListen(error);
+		};
+		const onListening = (): void => {
+			httpServer.off("error", onError);
+			const address = httpServer.address();
+			resolveListen(address && typeof address !== "string" ? (address as AddressInfo).port : candidatePort);
+		};
+		httpServer.once("error", onError);
+		httpServer.once("listening", onListening);
+		httpServer.listen(candidatePort, "127.0.0.1");
+	});
+}
+
+/**
+ * Binds starting at `requestedPort`. When the port is already taken (for example by a previous
+ * `orrery web` that is still running), the next ports are tried so startup does not fail with
+ * EADDRINUSE. Port 0 keeps the OS-assigned ephemeral behavior used by tests.
+ */
+async function listenOnAvailablePort(httpServer: Server, requestedPort: number): Promise<number> {
+	const lastPort = requestedPort === 0 ? 0 : Math.min(requestedPort + MAX_PORT_ATTEMPTS - 1, 65_535);
+	for (let candidate = requestedPort; ; candidate++) {
+		try {
+			return await listenOnPort(httpServer, candidate);
+		} catch (error) {
+			if (!isAddressInUse(error)) throw error;
+			if (candidate >= lastPort) {
+				throw new Error(`Ports ${requestedPort}-${candidate} are all in use`, { cause: error });
+			}
+			console.error(`Port ${candidate} is in use, trying port ${candidate + 1}`);
+		}
+	}
+}
+
 function configureRuntime(options: WebServerOptions): void {
 	port = resolveListenPort(options.port ?? configuredPort);
 	const directory = resolve(options.cwd ?? configuredCwd);
@@ -2015,15 +2058,7 @@ export async function startWebServer(options: WebServerOptions = {}): Promise<We
 			});
 	});
 
-	await new Promise<void>((resolveListen, rejectListen) => {
-		httpServer.once("error", rejectListen);
-		httpServer.listen(port, "127.0.0.1", () => {
-			httpServer.off("error", rejectListen);
-			const address = httpServer.address();
-			if (address && typeof address !== "string") port = (address as AddressInfo).port;
-			resolveListen();
-		});
-	});
+	port = await listenOnAvailablePort(httpServer, port);
 
 	const initial = getWorkspace(defaultWorkspaceId);
 	void runtimeStorage.run(initial, () => refreshGitStatus());

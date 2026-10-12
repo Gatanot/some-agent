@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- The Orrery web server now falls back to the next free port (up to 20 attempts) when the configured port is already in use, instead of failing with EADDRINUSE. The bound address is printed on startup.
+
 ## [0.2.9] - 2026-10-10
 
 ### Added

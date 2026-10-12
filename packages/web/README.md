@@ -17,7 +17,7 @@ orrery web
 orrery web --port 3210 --cwd /path/to/project
 ```
 
-Open `http://127.0.0.1:3210`. The development server uses Vite middleware for the Svelte UI and keeps the agent API on the same loopback port. The published `orrery web` command serves the bundled production assets.
+Open `http://127.0.0.1:3210`. The development server uses Vite middleware for the Svelte UI and keeps the agent API on the same loopback port. The published `orrery web` command serves the bundled production assets. If the requested port is already in use, the server tries the next ports (up to 20) and prints the address it bound.
 
 Useful environment variables:
 
